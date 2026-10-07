@@ -1,30 +1,34 @@
-From 4bd397517e347c848455f299566562468041608b Mon Sep 17 00:00:00 2001
-From: michioxd <michio.haiyaku@gmail.com>
-Date: Sun, 25 Jan 2026 15:31:12 +0700
-Subject: [PATCH] net: dsa: backport yt921x driver from net-next
+From 186623f4aa724c46cbb4dbd5235cf6942215f5b5 Mon Sep 17 00:00:00 2001
+From: David Yang <mmyangfl@gmail.com>
+Date: Fri, 17 Oct 2025 14:08:55 +0800
+Subject: [PATCH] net: dsa: yt921x: Add support for Motorcomm YT921x
 
+Motorcomm YT921x is a series of ethernet switches developed by Shanghai
+Motorcomm Electronic Technology, including:
+
+  - YT9215S / YT9215RB / YT9215SC: 5 GbE PHYs
+  - YT9213NB / YT9214NB: 2 GbE PHYs
+  - YT9218N / YT9218MB: 8 GbE PHYs
+
+and up to 2 GMACs.
+
+Driver verified on a stock wireless router with IPQ5018 + YT9215S.
+
+Signed-off-by: David Yang <mmyangfl@gmail.com>
+Link: https://patch.msgid.link/20251017060859.326450-4-mmyangfl@gmail.com
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
 ---
- drivers/net/dsa/Kconfig       |    7 +
- drivers/net/dsa/Makefile      |    1 +
- drivers/net/dsa/yt921x.c      | 3006 +++++++++++++++++++++++++++++++++
- drivers/net/dsa/yt921x.h      |  567 +++++++
- include/net/dsa.h             |   11 +
- include/uapi/linux/if_ether.h |    1 +
- net/dsa/Kconfig               |    5 +
- net/dsa/Makefile              |    1 +
- net/dsa/tag_yt921x.c          |  139 ++
- net/dsa/dsa.c                 | 64 +++++++++++++++++++++++++++++++++++++++++++++++
- net/dsa/tag.h                 | 18 ++++++++++++++++++
- 11 files changed, 3820 insertions(+)
+ drivers/net/dsa/Kconfig  |    7 +
+ drivers/net/dsa/Makefile |    1 +
+ drivers/net/dsa/yt921x.c | 2891 ++++++++++++++++++++++++++++++++++++++
+ drivers/net/dsa/yt921x.h |  504 +++++++
+ 4 files changed, 3403 insertions(+)
  create mode 100644 drivers/net/dsa/yt921x.c
  create mode 100644 drivers/net/dsa/yt921x.h
- create mode 100644 net/dsa/tag_yt921x.c
 
-diff --git a/drivers/net/dsa/Kconfig b/drivers/net/dsa/Kconfig
-index 2d10b4d6c..311c6c3cc 100644
 --- a/drivers/net/dsa/Kconfig
 +++ b/drivers/net/dsa/Kconfig
-@@ -151,4 +151,11 @@ config NET_DSA_VITESSE_VSC73XX_PLATFORM
+@@ -159,4 +159,11 @@ config NET_DSA_VITESSE_VSC73XX_PLATFORM
  	  This enables support for the Vitesse VSC7385, VSC7388, VSC7395
  	  and VSC7398 SparX integrated ethernet switches, connected over
  	  a CPU-attached address bus and work in memory-mapped I/O mode.
@@ -36,11 +40,9 @@ index 2d10b4d6c..311c6c3cc 100644
 +	  This enables support for the Motorcomm YT9215 ethernet switch
 +	  chip.
  endmenu
-diff --git a/drivers/net/dsa/Makefile b/drivers/net/dsa/Makefile
-index cb9a97340..dc81769fa 100644
 --- a/drivers/net/dsa/Makefile
 +++ b/drivers/net/dsa/Makefile
-@@ -17,6 +17,7 @@ obj-$(CONFIG_NET_DSA_SMSC_LAN9303_MDIO) += lan9303_mdio.o
+@@ -18,6 +18,7 @@ obj-$(CONFIG_NET_DSA_SMSC_LAN9303_MDIO)
  obj-$(CONFIG_NET_DSA_VITESSE_VSC73XX) += vitesse-vsc73xx-core.o
  obj-$(CONFIG_NET_DSA_VITESSE_VSC73XX_PLATFORM) += vitesse-vsc73xx-platform.o
  obj-$(CONFIG_NET_DSA_VITESSE_VSC73XX_SPI) += vitesse-vsc73xx-spi.o
@@ -48,12 +50,9 @@ index cb9a97340..dc81769fa 100644
  obj-y				+= b53/
  obj-y				+= hirschmann/
  obj-y				+= microchip/
-diff --git a/drivers/net/dsa/yt921x.c b/drivers/net/dsa/yt921x.c
-new file mode 100644
-index 000000000..efeed24d2
 --- /dev/null
 +++ b/drivers/net/dsa/yt921x.c
-@@ -0,0 +1,3007 @@
+@@ -0,0 +1,2891 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +/*
 + * Driver for Motorcomm YT921x Switch
@@ -95,55 +94,60 @@ index 000000000..efeed24d2
 + * to perform 32bit MIB overflow wraparound.
 + */
 +static const struct yt921x_mib_desc yt921x_mib_descs[] = {
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_BROADCAST, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PAUSE, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_MULTICAST, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_CRC_ERR, NULL),
++	MIB_DESC(1, 0x00, NULL),	/* RxBroadcast */
++	MIB_DESC(1, 0x04, NULL),	/* RxPause */
++	MIB_DESC(1, 0x08, NULL),	/* RxMulticast */
++	MIB_DESC(1, 0x0c, NULL),	/* RxCrcErr */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_ALIGN_ERR, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_UNDERSIZE_ERR, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_FRAG_ERR, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_64, NULL),
++	MIB_DESC(1, 0x10, NULL),	/* RxAlignErr */
++	MIB_DESC(1, 0x14, NULL),	/* RxUnderSizeErr */
++	MIB_DESC(1, 0x18, NULL),	/* RxFragErr */
++	MIB_DESC(1, 0x1c, NULL),	/* RxPktSz64 */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_65_TO_127, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_128_TO_255, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_256_TO_511, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_512_TO_1023, NULL),
++	MIB_DESC(1, 0x20, NULL),	/* RxPktSz65To127 */
++	MIB_DESC(1, 0x24, NULL),	/* RxPktSz128To255 */
++	MIB_DESC(1, 0x28, NULL),	/* RxPktSz256To511 */
++	MIB_DESC(1, 0x2c, NULL),	/* RxPktSz512To1023 */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_1024_TO_1518, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_PKT_SZ_1519_TO_MAX, NULL),
-+	MIB_DESC(2, YT921X_MIB_DATA_RX_GOOD_BYTES, NULL),
++	MIB_DESC(1, 0x30, NULL),	/* RxPktSz1024To1518 */
++	MIB_DESC(1, 0x34, NULL),	/* RxPktSz1519ToMax */
++	MIB_DESC(2, 0x38, NULL),	/* RxGoodBytes */
++	/* 0x3c */
 +
-+	MIB_DESC(2, YT921X_MIB_DATA_RX_BAD_BYTES, "RxBadBytes"),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_OVERSIZE_ERR, NULL),
++	MIB_DESC(2, 0x40, "RxBadBytes"),
++	/* 0x44 */
++	MIB_DESC(2, 0x48, NULL),	/* RxOverSzErr */
++	/* 0x4c */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_DROPPED, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_BROADCAST, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PAUSE, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_MULTICAST, NULL),
++	MIB_DESC(1, 0x50, NULL),	/* RxDropped */
++	MIB_DESC(1, 0x54, NULL),	/* TxBroadcast */
++	MIB_DESC(1, 0x58, NULL),	/* TxPause */
++	MIB_DESC(1, 0x5c, NULL),	/* TxMulticast */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_UNDERSIZE_ERR, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_64, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_65_TO_127, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_128_TO_255, NULL),
++	MIB_DESC(1, 0x60, NULL),	/* TxUnderSizeErr */
++	MIB_DESC(1, 0x64, NULL),	/* TxPktSz64 */
++	MIB_DESC(1, 0x68, NULL),	/* TxPktSz65To127 */
++	MIB_DESC(1, 0x6c, NULL),	/* TxPktSz128To255 */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_256_TO_511, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_512_TO_1023, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_1024_TO_1518, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT_SZ_1519_TO_MAX, NULL),
++	MIB_DESC(1, 0x70, NULL),	/* TxPktSz256To511 */
++	MIB_DESC(1, 0x74, NULL),	/* TxPktSz512To1023 */
++	MIB_DESC(1, 0x78, NULL),	/* TxPktSz1024To1518 */
++	MIB_DESC(1, 0x7c, NULL),	/* TxPktSz1519ToMax */
 +
-+	MIB_DESC(2, YT921X_MIB_DATA_TX_GOOD_BYTES, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_COLLISION, NULL),
++	MIB_DESC(2, 0x80, NULL),	/* TxGoodBytes */
++	/* 0x84 */
++	MIB_DESC(2, 0x88, NULL),	/* TxCollision */
++	/* 0x8c */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_EXCESSIVE_COLLISION, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_MULTIPLE_COLLISION, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_SINGLE_COLLISION, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_PKT, NULL),
++	MIB_DESC(1, 0x90, NULL),	/* TxExcessiveCollistion */
++	MIB_DESC(1, 0x94, NULL),	/* TxMultipleCollision */
++	MIB_DESC(1, 0x98, NULL),	/* TxSingleCollision */
++	MIB_DESC(1, 0x9c, NULL),	/* TxPkt */
 +
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_DEFERRED, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_LATE_COLLISION, NULL),
-+	MIB_DESC(1, YT921X_MIB_DATA_RX_OAM, "RxOAM"),
-+	MIB_DESC(1, YT921X_MIB_DATA_TX_OAM, "TxOAM"),
++	MIB_DESC(1, 0xa0, NULL),	/* TxDeferred */
++	MIB_DESC(1, 0xa4, NULL),	/* TxLateCollision */
++	MIB_DESC(1, 0xa8, "RxOAM"),
++	MIB_DESC(1, 0xac, "TxOAM"),
 +};
 +
 +struct yt921x_info {
@@ -738,26 +742,25 @@ index 000000000..efeed24d2
 +		const struct yt921x_mib_desc *desc = &yt921x_mib_descs[i];
 +		u32 reg = YT921X_MIBn_DATA0(port) + desc->offset;
 +		u64 *valp = &((u64 *)mib)[i];
++		u64 val = *valp;
 +		u32 val0;
-+		u64 val;
++		u32 val1;
 +
 +		res = yt921x_reg_read(priv, reg, &val0);
 +		if (res)
 +			break;
 +
 +		if (desc->size <= 1) {
-+			u64 old_val = *valp;
-+
-+			val = (old_val & ~(u64)U32_MAX) | val0;
-+			if (val < old_val)
-+				val += 1ull << 32;
++			if (val < (u32)val)
++				/* overflow */
++				val += (u64)U32_MAX + 1;
++			val &= ~U32_MAX;
++			val |= val0;
 +		} else {
-+			u32 val1;
-+
 +			res = yt921x_reg_read(priv, reg + 4, &val1);
 +			if (res)
 +				break;
-+			val = ((u64)val1 << 32) | val0;
++			val = ((u64)val0 << 32) | val1;
 +		}
 +
 +		WRITE_ONCE(*valp, val);
@@ -1183,7 +1186,7 @@ index 000000000..efeed24d2
 +	res = yt921x_reg_wait(priv, YT921X_FDB_RESULT, YT921X_FDB_RESULT_DONE,
 +			      &val);
 +	if (res) {
-+		dev_err(dev, "FDB probably stuck\n");
++		dev_err(dev, "FDB probably stucked\n");
 +		return res;
 +	}
 +
@@ -2155,117 +2158,6 @@ index 000000000..efeed24d2
 +	return res;
 +}
 +
-+static int
-+yt921x_dsa_port_mst_state_set(struct dsa_switch *ds, int port,
-+			      const struct switchdev_mst_state *st)
-+{
-+	struct yt921x_priv *priv = to_yt921x_priv(ds);
-+	u32 mask;
-+	u32 ctrl;
-+	int res;
-+
-+	mask = YT921X_STP_PORTn_M(port);
-+	switch (st->state) {
-+	case BR_STATE_DISABLED:
-+		ctrl = YT921X_STP_PORTn_DISABLED(port);
-+		break;
-+	case BR_STATE_LISTENING:
-+	case BR_STATE_LEARNING:
-+		ctrl = YT921X_STP_PORTn_LEARNING(port);
-+		break;
-+	case BR_STATE_FORWARDING:
-+	default:
-+		ctrl = YT921X_STP_PORTn_FORWARD(port);
-+		break;
-+	case BR_STATE_BLOCKING:
-+		ctrl = YT921X_STP_PORTn_BLOCKING(port);
-+		break;
-+	}
-+
-+	mutex_lock(&priv->reg_lock);
-+	res = yt921x_reg_update_bits(priv, YT921X_STPn(st->msti), mask, ctrl);
-+	mutex_unlock(&priv->reg_lock);
-+
-+	return res;
-+}
-+
-+static int
-+yt921x_dsa_vlan_msti_set(struct dsa_switch *ds, struct dsa_bridge bridge,
-+			 const struct switchdev_vlan_msti *msti)
-+{
-+	struct yt921x_priv *priv = to_yt921x_priv(ds);
-+	u64 mask64;
-+	u64 ctrl64;
-+	int res;
-+
-+	if (!msti->vid)
-+		return -EINVAL;
-+	if (!msti->msti || msti->msti >= YT921X_MSTI_NUM)
-+		return -EINVAL;
-+
-+	mask64 = YT921X_VLAN_CTRL_STP_ID_M;
-+	ctrl64 = YT921X_VLAN_CTRL_STP_ID(msti->msti);
-+
-+	mutex_lock(&priv->reg_lock);
-+	res = yt921x_reg64_update_bits(priv, YT921X_VLANn_CTRL(msti->vid),
-+				       mask64, ctrl64);
-+	mutex_unlock(&priv->reg_lock);
-+
-+	return res;
-+}
-+
-+static void
-+yt921x_dsa_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
-+{
-+	struct yt921x_priv *priv = to_yt921x_priv(ds);
-+	struct dsa_port *dp = dsa_to_port(ds, port);
-+	struct device *dev = to_device(priv);
-+	bool learning;
-+	u32 mask;
-+	u32 ctrl;
-+	int res;
-+
-+	mask = YT921X_STP_PORTn_M(port);
-+	learning = false;
-+	switch (state) {
-+	case BR_STATE_DISABLED:
-+		ctrl = YT921X_STP_PORTn_DISABLED(port);
-+		break;
-+	case BR_STATE_LISTENING:
-+		ctrl = YT921X_STP_PORTn_LEARNING(port);
-+		break;
-+	case BR_STATE_LEARNING:
-+		ctrl = YT921X_STP_PORTn_LEARNING(port);
-+		learning = dp->learning;
-+		break;
-+	case BR_STATE_FORWARDING:
-+	default:
-+		ctrl = YT921X_STP_PORTn_FORWARD(port);
-+		learning = dp->learning;
-+		break;
-+	case BR_STATE_BLOCKING:
-+		ctrl = YT921X_STP_PORTn_BLOCKING(port);
-+		break;
-+	}
-+
-+	mutex_lock(&priv->reg_lock);
-+	do {
-+		res = yt921x_reg_update_bits(priv, YT921X_STPn(0), mask, ctrl);
-+		if (res)
-+			break;
-+
-+		mask = YT921X_PORT_LEARN_DIS;
-+		ctrl = !learning ? YT921X_PORT_LEARN_DIS : 0;
-+		res = yt921x_reg_update_bits(priv, YT921X_PORTn_LEARN(port),
-+					     mask, ctrl);
-+	} while (0);
-+	mutex_unlock(&priv->reg_lock);
-+
-+	if (res)
-+		dev_err(dev, "Failed to %s port %d: %i\n", "set STP state for",
-+			port, res);
-+}
-+
 +static int yt921x_port_down(struct yt921x_priv *priv, int port)
 +{
 +	u32 mask;
@@ -2931,9 +2823,6 @@ index 000000000..efeed24d2
 +	/* mtu */
 +	.port_change_mtu	= yt921x_dsa_port_change_mtu,
 +	.port_max_mtu		= yt921x_dsa_port_max_mtu,
-+	/* hsr */
-+	.port_hsr_leave		= dsa_port_simple_hsr_leave,
-+	.port_hsr_join		= dsa_port_simple_hsr_join,
 +	/* mirror */
 +	.port_mirror_del	= yt921x_dsa_port_mirror_del,
 +	.port_mirror_add	= yt921x_dsa_port_mirror_add,
@@ -2954,10 +2843,6 @@ index 000000000..efeed24d2
 +	.port_bridge_flags	= yt921x_dsa_port_bridge_flags,
 +	.port_bridge_leave	= yt921x_dsa_port_bridge_leave,
 +	.port_bridge_join	= yt921x_dsa_port_bridge_join,
-+	/* mst */
-+	.port_mst_state_set	= yt921x_dsa_port_mst_state_set,
-+	.vlan_msti_set		= yt921x_dsa_vlan_msti_set,
-+	.port_stp_state_set	= yt921x_dsa_port_stp_state_set,
 +	/* port */
 +	.get_tag_protocol	= yt921x_dsa_get_tag_protocol,
 +	.phylink_get_caps	= yt921x_dsa_phylink_get_caps,
@@ -3030,8 +2915,6 @@ index 000000000..efeed24d2
 +	ds->assisted_learning_on_cpu_port = true;
 +	ds->priv = priv;
 +	ds->ops = &yt921x_dsa_switch_ops;
-+	ds->ageing_time_min = 1 * 5000;
-+	ds->ageing_time_max = U16_MAX * 5000;
 +	ds->phylink_mac_ops = &yt921x_phylink_mac_ops;
 +	ds->num_ports = YT921X_PORT_NUM;
 +
@@ -3061,13 +2944,9 @@ index 000000000..efeed24d2
 +MODULE_AUTHOR("David Yang <mmyangfl@gmail.com>");
 +MODULE_DESCRIPTION("Driver for Motorcomm YT921x Switch");
 +MODULE_LICENSE("GPL");
-\ No newline at end of file
-diff --git a/drivers/net/dsa/yt921x.h b/drivers/net/dsa/yt921x.h
-new file mode 100644
-index 000000000..fae217eb7
 --- /dev/null
 +++ b/drivers/net/dsa/yt921x.h
-@@ -0,0 +1,567 @@
+@@ -0,0 +1,504 @@
 +/* SPDX-License-Identifier: GPL-2.0-or-later */
 +/*
 + * Copyright (c) 2025 David Yang
@@ -3243,60 +3122,6 @@ index 000000000..fae217eb7
 +#define  YT921X_MIB_CTRL_ALL_PORT		BIT(0)
 +#define YT921X_MIBn_DATA0(port)		(0xc0100 + 0x100 * (port))
 +#define YT921X_MIBn_DATAm(port, x)	(YT921X_MIBn_DATA0(port) + 4 * (x))
-+#define  YT921X_MIB_DATA_RX_BROADCAST		0x00
-+#define  YT921X_MIB_DATA_RX_PAUSE		0x04
-+#define  YT921X_MIB_DATA_RX_MULTICAST		0x08
-+#define  YT921X_MIB_DATA_RX_CRC_ERR		0x0c
-+
-+#define  YT921X_MIB_DATA_RX_ALIGN_ERR		0x10
-+#define  YT921X_MIB_DATA_RX_UNDERSIZE_ERR	0x14
-+#define  YT921X_MIB_DATA_RX_FRAG_ERR		0x18
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_64		0x1c
-+
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_65_TO_127	0x20
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_128_TO_255	0x24
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_256_TO_511	0x28
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_512_TO_1023	0x2c
-+
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_1024_TO_1518	0x30
-+#define  YT921X_MIB_DATA_RX_PKT_SZ_1519_TO_MAX	0x34
-+/* 0x38: unused */
-+#define  YT921X_MIB_DATA_RX_GOOD_BYTES		0x3c
-+
-+/* 0x40: 64 bytes */
-+#define  YT921X_MIB_DATA_RX_BAD_BYTES		0x44
-+/* 0x48: 64 bytes */
-+#define  YT921X_MIB_DATA_RX_OVERSIZE_ERR	0x4c
-+
-+#define  YT921X_MIB_DATA_RX_DROPPED		0x50
-+#define  YT921X_MIB_DATA_TX_BROADCAST		0x54
-+#define  YT921X_MIB_DATA_TX_PAUSE		0x58
-+#define  YT921X_MIB_DATA_TX_MULTICAST		0x5c
-+
-+#define  YT921X_MIB_DATA_TX_UNDERSIZE_ERR	0x60
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_64		0x64
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_65_TO_127	0x68
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_128_TO_255	0x6c
-+
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_256_TO_511	0x70
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_512_TO_1023	0x74
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_1024_TO_1518	0x78
-+#define  YT921X_MIB_DATA_TX_PKT_SZ_1519_TO_MAX	0x7c
-+
-+/* 0x80: unused */
-+#define  YT921X_MIB_DATA_TX_GOOD_BYTES		0x84
-+/* 0x88: 64 bytes */
-+#define  YT921X_MIB_DATA_TX_COLLISION		0x8c
-+
-+#define  YT921X_MIB_DATA_TX_EXCESSIVE_COLLISION	0x90
-+#define  YT921X_MIB_DATA_TX_MULTIPLE_COLLISION	0x94
-+#define  YT921X_MIB_DATA_TX_SINGLE_COLLISION	0x98
-+#define  YT921X_MIB_DATA_TX_PKT			0x9c
-+
-+#define  YT921X_MIB_DATA_TX_DEFERRED		0xa0
-+#define  YT921X_MIB_DATA_TX_LATE_COLLISION	0xa4
-+#define  YT921X_MIB_DATA_RX_OAM			0xa8
-+#define  YT921X_MIB_DATA_TX_OAM			0xac
 +
 +#define YT921X_EDATA_CTRL		0xe0000
 +#define  YT921X_EDATA_CTRL_ADDR_M		GENMASK(15, 8)
@@ -3344,13 +3169,6 @@ index 000000000..fae217eb7
 +#define  YT921X_VLAN_IGR_FILTER_PORTn(port)	BIT(port)
 +#define YT921X_PORTn_ISOLATION(port)	(0x180294 + 4 * (port))
 +#define  YT921X_PORT_ISOLATION_BLOCKn(port)	BIT(port)
-+#define YT921X_STPn(n)			(0x18038c + 4 * (n))
-+#define  YT921X_STP_PORTn_M(port)		GENMASK(2 * (port) + 1, 2 * (port))
-+#define   YT921X_STP_PORTn(port, x)			((x) << (2 * (port)))
-+#define   YT921X_STP_PORTn_DISABLED(port)		YT921X_STP_PORTn(port, 0)
-+#define   YT921X_STP_PORTn_LEARNING(port)		YT921X_STP_PORTn(port, 1)
-+#define   YT921X_STP_PORTn_BLOCKING(port)		YT921X_STP_PORTn(port, 2)
-+#define   YT921X_STP_PORTn_FORWARD(port)		YT921X_STP_PORTn(port, 3)
 +#define YT921X_PORTn_LEARN(port)	(0x1803d0 + 4 * (port))
 +#define  YT921X_PORT_LEARN_VID_LEARN_MULTI_EN	BIT(22)
 +#define  YT921X_PORT_LEARN_VID_LEARN_MODE	BIT(21)
@@ -3459,23 +3277,23 @@ index 000000000..fae217eb7
 +#define  YT921X_FDB_HW_FLUSH_ON_LINKDOWN	BIT(0)
 +
 +#define YT921X_VLANn_CTRL(vlan)		(0x188000 + 8 * (vlan))
-+#define  YT921X_VLAN_CTRL_UNTAG_PORTS_M		GENMASK_ULL(50, 40)
++#define  YT921X_VLAN_CTRL_UNTAG_PORTS_M		GENMASK(50, 40)
 +#define   YT921X_VLAN_CTRL_UNTAG_PORTS(x)		FIELD_PREP(YT921X_VLAN_CTRL_UNTAG_PORTS_M, (x))
-+#define  YT921X_VLAN_CTRL_UNTAG_PORTn(port)	BIT_ULL((port) + 40)
-+#define  YT921X_VLAN_CTRL_STP_ID_M		GENMASK_ULL(39, 36)
++#define  YT921X_VLAN_CTRL_UNTAG_PORTn(port)	BIT((port) + 40)
++#define  YT921X_VLAN_CTRL_STP_ID_M		GENMASK(39, 36)
 +#define   YT921X_VLAN_CTRL_STP_ID(x)			FIELD_PREP(YT921X_VLAN_CTRL_STP_ID_M, (x))
-+#define  YT921X_VLAN_CTRL_SVLAN_EN		BIT_ULL(35)
-+#define  YT921X_VLAN_CTRL_FID_M			GENMASK_ULL(34, 23)
++#define  YT921X_VLAN_CTRL_SVLAN_EN		BIT(35)
++#define  YT921X_VLAN_CTRL_FID_M			GENMASK(34, 23)
 +#define   YT921X_VLAN_CTRL_FID(x)			FIELD_PREP(YT921X_VLAN_CTRL_FID_M, (x))
-+#define  YT921X_VLAN_CTRL_LEARN_DIS		BIT_ULL(22)
-+#define  YT921X_VLAN_CTRL_INT_PRI_EN		BIT_ULL(21)
-+#define  YT921X_VLAN_CTRL_INT_PRI_M		GENMASK_ULL(20, 18)
-+#define  YT921X_VLAN_CTRL_PORTS_M		GENMASK_ULL(17, 7)
++#define  YT921X_VLAN_CTRL_LEARN_DIS		BIT(22)
++#define  YT921X_VLAN_CTRL_INT_PRI_EN		BIT(21)
++#define  YT921X_VLAN_CTRL_INT_PRI_M		GENMASK(20, 18)
++#define  YT921X_VLAN_CTRL_PORTS_M		GENMASK(17, 7)
 +#define   YT921X_VLAN_CTRL_PORTS(x)			FIELD_PREP(YT921X_VLAN_CTRL_PORTS_M, (x))
-+#define  YT921X_VLAN_CTRL_PORTn(port)		BIT_ULL((port) + 7)
-+#define  YT921X_VLAN_CTRL_BYPASS_1X_AC		BIT_ULL(6)
-+#define  YT921X_VLAN_CTRL_METER_EN		BIT_ULL(5)
-+#define  YT921X_VLAN_CTRL_METER_ID_M		GENMASK_ULL(4, 0)
++#define  YT921X_VLAN_CTRL_PORTn(port)		BIT((port) + 7)
++#define  YT921X_VLAN_CTRL_BYPASS_1X_AC		BIT(6)
++#define  YT921X_VLAN_CTRL_METER_EN		BIT(5)
++#define  YT921X_VLAN_CTRL_METER_ID_M		GENMASK(4, 0)
 +
 +#define YT921X_TPID_IGRn(x)		(0x210000 + 4 * (x))	/* [0, 3] */
 +#define  YT921X_TPID_IGR_TPID_M			GENMASK(15, 0)
@@ -3525,8 +3343,6 @@ index 000000000..fae217eb7
 +	YT921X_FDB_ENTRY_STATUS_PENDING = 6,
 +	YT921X_FDB_ENTRY_STATUS_STATIC = 7,
 +};
-+
-+#define YT921X_MSTI_NUM		16
 +
 +#define YT9215_MAJOR	0x9002
 +#define YT9218_MAJOR	0x9001
@@ -3635,340 +3451,3 @@ index 000000000..fae217eb7
 +};
 +
 +#endif
-\ No newline at end of file
-diff --git a/include/net/dsa.h b/include/net/dsa.h
-index d7a6c2930..3ace46986 100644
---- a/include/net/dsa.h
-+++ b/include/net/dsa.h
-@@ -55,6 +55,7 @@ struct tc_action;
- #define DSA_TAG_PROTO_LAN937X_VALUE		27
- #define DSA_TAG_PROTO_VSC73XX_8021Q_VALUE	28
- #define DSA_TAG_PROTO_BRCM_LEGACY_FCS_VALUE	29
-+#define DSA_TAG_PROTO_YT921X_VALUE		30
- 
- enum dsa_tag_protocol {
- 	DSA_TAG_PROTO_NONE		= DSA_TAG_PROTO_NONE_VALUE,
-@@ -87,6 +88,7 @@ enum dsa_tag_protocol {
- 	DSA_TAG_PROTO_RZN1_A5PSW	= DSA_TAG_PROTO_RZN1_A5PSW_VALUE,
- 	DSA_TAG_PROTO_LAN937X		= DSA_TAG_PROTO_LAN937X_VALUE,
- 	DSA_TAG_PROTO_VSC73XX_8021Q	= DSA_TAG_PROTO_VSC73XX_8021Q_VALUE,
-+	DSA_TAG_PROTO_YT921X		= DSA_TAG_PROTO_YT921X_VALUE,
- };
- 
- struct dsa_switch;
-@@ -1338,6 +1338,15 @@ bool dsa_mdb_present_in_other_db(struct dsa_switch *ds, int port,
- 				 const struct switchdev_obj_port_mdb *mdb,
- 				 struct dsa_db db);
- 
-+int dsa_port_simple_hsr_validate(struct dsa_switch *ds, int port,
-+				 struct net_device *hsr,
-+				 struct netlink_ext_ack *extack);
-+int dsa_port_simple_hsr_join(struct dsa_switch *ds, int port,
-+			     struct net_device *hsr,
-+			     struct netlink_ext_ack *extack);
-+int dsa_port_simple_hsr_leave(struct dsa_switch *ds, int port,
-+			      struct net_device *hsr);
-+
- /* Keep inline for faster access in hot path */
- static inline bool netdev_uses_dsa(const struct net_device *dev)
- {
-diff --git a/include/uapi/linux/if_ether.h b/include/uapi/linux/if_ether.h
-index 69e0457eb..cfd200c87 100644
---- a/include/uapi/linux/if_ether.h
-+++ b/include/uapi/linux/if_ether.h
-@@ -114,6 +114,7 @@
- #define ETH_P_QINQ1	0x9100		/* deprecated QinQ VLAN [ NOT AN OFFICIALLY REGISTERED ID ] */
- #define ETH_P_QINQ2	0x9200		/* deprecated QinQ VLAN [ NOT AN OFFICIALLY REGISTERED ID ] */
- #define ETH_P_QINQ3	0x9300		/* deprecated QinQ VLAN [ NOT AN OFFICIALLY REGISTERED ID ] */
-+#define ETH_P_YT921X	0x9988		/* Motorcomm YT921x DSA [ NOT AN OFFICIALLY REGISTERED ID ] */
- #define ETH_P_EDSA	0xDADA		/* Ethertype DSA [ NOT AN OFFICIALLY REGISTERED ID ] */
- #define ETH_P_DSA_8021Q	0xDADB		/* Fake VLAN Header for DSA [ NOT AN OFFICIALLY REGISTERED ID ] */
- #define ETH_P_DSA_A5PSW	0xE001		/* A5PSW Tag Value [ NOT AN OFFICIALLY REGISTERED ID ] */
-diff --git a/net/dsa/Kconfig b/net/dsa/Kconfig
-index 2dfe90636..f6379f842 100644
---- a/net/dsa/Kconfig
-+++ b/net/dsa/Kconfig
-@@ -178,4 +178,9 @@ config NET_DSA_TAG_XRS700X
- 	  Say Y or M if you want to enable support for tagging frames for
- 	  Arrow SpeedChips XRS700x switches that use a single byte tag trailer.
- 
-+config NET_DSA_TAG_YT921X
-+	tristate "Tag driver for Motorcomm YT921x switches"
-+	help
-+	  Say Y or M if you want to enable support for tagging frames for
-+	  Motorcomm YT921x switches.
- endif
-diff --git a/net/dsa/Makefile b/net/dsa/Makefile
-index 555c07cfe..4b011a1d5 100644
---- a/net/dsa/Makefile
-+++ b/net/dsa/Makefile
-@@ -39,6 +39,7 @@ obj-$(CONFIG_NET_DSA_TAG_SJA1105) += tag_sja1105.o
- obj-$(CONFIG_NET_DSA_TAG_TRAILER) += tag_trailer.o
- obj-$(CONFIG_NET_DSA_TAG_VSC73XX_8021Q) += tag_vsc73xx_8021q.o
- obj-$(CONFIG_NET_DSA_TAG_XRS700X) += tag_xrs700x.o
-+obj-$(CONFIG_NET_DSA_TAG_YT921X) += tag_yt921x.o
- 
- # for tracing framework to find trace.h
- CFLAGS_trace.o := -I$(src)
-diff --git a/net/dsa/tag_yt921x.c b/net/dsa/tag_yt921x.c
-new file mode 100644
-index 000000000..6ac479704
---- /dev/null
-+++ b/net/dsa/tag_yt921x.c
-@@ -0,0 +1,139 @@
-+// SPDX-License-Identifier: GPL-2.0-or-later
-+/*
-+ * Motorcomm YT921x Switch Extended CPU Port Tagging
-+ *
-+ * Copyright (c) 2025 David Yang <mmyangfl@gmail.com>
-+ *
-+ * +----+----+-------+-----+----+---------
-+ * | DA | SA | TagET | Tag | ET | Payload ...
-+ * +----+----+-------+-----+----+---------
-+ *   6    6      2      6    2       N
-+ *
-+ * Tag Ethertype: CPU_TAG_TPID_TPID (default: ETH_P_YT921X = 0x9988)
-+ *   * Hardcoded for the moment, but still configurable. Discuss it if there
-+ *     are conflicts somewhere and/or you want to change it for some reason.
-+ * Tag:
-+ *   2: VLAN Tag
-+ *   2: Rx Port
-+ *     15b: Rx Port Valid
-+ *     14b-11b: Rx Port
-+ *     10b-0b: Cmd?
-+ *   2: Tx Port(s)
-+ *     15b: Tx Port(s) Valid
-+ *     10b-0b: Tx Port(s) Mask
-+ */
-+
-+#include <linux/etherdevice.h>
-+
-+#include "tag.h"
-+
-+#define YT921X_TAG_NAME	"yt921x"
-+
-+#define YT921X_TAG_LEN	8
-+
-+#define YT921X_TAG_PORT_EN		BIT(15)
-+#define YT921X_TAG_RX_PORT_M		GENMASK(14, 11)
-+#define YT921X_TAG_RX_CMD_M		GENMASK(10, 0)
-+#define  YT921X_TAG_RX_CMD(x)			FIELD_PREP(YT921X_TAG_RX_CMD_M, (x))
-+#define  YT921X_TAG_RX_CMD_FORWARDED		0x80
-+#define  YT921X_TAG_RX_CMD_UNK_UCAST		0xb2
-+#define  YT921X_TAG_RX_CMD_UNK_MCAST		0xb4
-+#define YT921X_TAG_TX_PORTS		GENMASK(10, 0)
-+
-+static struct sk_buff *
-+yt921x_tag_xmit(struct sk_buff *skb, struct net_device *netdev)
-+{
-+	__be16 *tag;
-+	u16 tx;
-+
-+	skb_push(skb, YT921X_TAG_LEN);
-+	dsa_alloc_etype_header(skb, YT921X_TAG_LEN);
-+
-+	tag = dsa_etype_header_pos_tx(skb);
-+
-+	tag[0] = htons(ETH_P_YT921X);
-+	/* VLAN tag unrelated when TX */
-+	tag[1] = 0;
-+	tag[2] = 0;
-+	tx = FIELD_PREP(YT921X_TAG_TX_PORTS, dsa_xmit_port_mask(skb, netdev)) |
-+	     YT921X_TAG_PORT_EN;
-+	tag[3] = htons(tx);
-+
-+	return skb;
-+}
-+
-+static struct sk_buff *
-+yt921x_tag_rcv(struct sk_buff *skb, struct net_device *netdev)
-+{
-+	unsigned int port;
-+	__be16 *tag;
-+	u16 cmd;
-+	u16 rx;
-+
-+	if (unlikely(!pskb_may_pull(skb, YT921X_TAG_LEN)))
-+		return NULL;
-+
-+	tag = dsa_etype_header_pos_rx(skb);
-+
-+	if (unlikely(tag[0] != htons(ETH_P_YT921X))) {
-+		dev_warn_ratelimited(&netdev->dev,
-+				     "Unexpected EtherType 0x%04x\n",
-+				     ntohs(tag[0]));
-+		return NULL;
-+	}
-+
-+	/* Locate which port this is coming from */
-+	rx = ntohs(tag[2]);
-+	if (unlikely((rx & YT921X_TAG_PORT_EN) == 0)) {
-+		dev_warn_ratelimited(&netdev->dev,
-+				     "Unexpected rx tag 0x%04x\n", rx);
-+		return NULL;
-+	}
-+
-+	port = FIELD_GET(YT921X_TAG_RX_PORT_M, rx);
-+	skb->dev = dsa_conduit_find_user(netdev, 0, port);
-+	if (unlikely(!skb->dev)) {
-+		dev_warn_ratelimited(&netdev->dev,
-+				     "Couldn't decode source port %u\n", port);
-+		return NULL;
-+	}
-+
-+	cmd = FIELD_GET(YT921X_TAG_RX_CMD_M, rx);
-+	switch (cmd) {
-+	case YT921X_TAG_RX_CMD_FORWARDED:
-+		/* Already forwarded by hardware */
-+		dsa_default_offload_fwd_mark(skb);
-+		break;
-+	case YT921X_TAG_RX_CMD_UNK_UCAST:
-+	case YT921X_TAG_RX_CMD_UNK_MCAST:
-+		/* NOTE: hardware doesn't distinguish between TRAP (copy to CPU
-+		 * only) and COPY (forward and copy to CPU). In order to perform
-+		 * a soft switch, NEVER use COPY action in the switch driver.
-+		 */
-+		break;
-+	default:
-+		dev_warn_ratelimited(&netdev->dev,
-+				     "Unexpected rx cmd 0x%02x\n", cmd);
-+		break;
-+	}
-+
-+	/* Remove YT921x tag and update checksum */
-+	skb_pull_rcsum(skb, YT921X_TAG_LEN);
-+	dsa_strip_etype_header(skb, YT921X_TAG_LEN);
-+
-+	return skb;
-+}
-+
-+static const struct dsa_device_ops yt921x_netdev_ops = {
-+	.name	= YT921X_TAG_NAME,
-+	.proto	= DSA_TAG_PROTO_YT921X,
-+	.xmit	= yt921x_tag_xmit,
-+	.rcv	= yt921x_tag_rcv,
-+	.needed_headroom = YT921X_TAG_LEN,
-+};
-+
-+MODULE_DESCRIPTION("DSA tag driver for Motorcomm YT921x switches");
-+MODULE_LICENSE("GPL");
-+MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_YT921X, YT921X_TAG_NAME);
-+
-+module_dsa_tag_driver(yt921x_netdev_ops);
-\ No newline at end of file
-diff --git a/net/dsa/dsa.c b/net/dsa/dsa.c
-index 97599e0..16b19aa 100644
---- a/net/dsa/dsa.c
-+++ b/net/dsa/dsa.c
-@@ -9,6 +9,7 @@
- 
- #include <linux/device.h>
- #include <linux/err.h>
-+#include <linux/if_hsr.h>
- #include <linux/list.h>
- #include <linux/module.h>
- #include <linux/netdevice.h>
-@@ -1768,6 +1768,70 @@ bool dsa_mdb_present_in_other_db(struct dsa_switch *ds, int port,
- }
- EXPORT_SYMBOL_GPL(dsa_mdb_present_in_other_db);
- 
-+/* Helpers for switches without specific HSR offloads, but which can implement
-+ * NETIF_F_HW_HSR_DUP because their tagger uses dsa_xmit_port_mask()
-+ */
-+int dsa_port_simple_hsr_validate(struct dsa_switch *ds, int port,
-+				 struct net_device *hsr,
-+				 struct netlink_ext_ack *extack)
-+{
-+	enum hsr_port_type type;
-+	int err;
-+
-+	err = hsr_get_port_type(hsr, dsa_to_port(ds, port)->user, &type);
-+	if (err)
-+		return err;
-+
-+	if (type != HSR_PT_SLAVE_A && type != HSR_PT_SLAVE_B) {
-+		NL_SET_ERR_MSG_MOD(extack,
-+				   "Only HSR slave ports can be offloaded");
-+		return -EOPNOTSUPP;
-+	}
-+
-+	return 0;
-+}
-+EXPORT_SYMBOL_GPL(dsa_port_simple_hsr_validate);
-+
-+int dsa_port_simple_hsr_join(struct dsa_switch *ds, int port,
-+			     struct net_device *hsr,
-+			     struct netlink_ext_ack *extack)
-+{
-+	struct dsa_port *dp = dsa_to_port(ds, port), *other_dp;
-+	int err;
-+
-+	err = dsa_port_simple_hsr_validate(ds, port, hsr, extack);
-+	if (err)
-+		return err;
-+
-+	dsa_hsr_foreach_port(other_dp, ds, hsr) {
-+		if (other_dp != dp) {
-+			dp->user->features |= NETIF_F_HW_HSR_DUP;
-+			other_dp->user->features |= NETIF_F_HW_HSR_DUP;
-+			break;
-+		}
-+	}
-+
-+	return 0;
-+}
-+EXPORT_SYMBOL_GPL(dsa_port_simple_hsr_join);
-+
-+int dsa_port_simple_hsr_leave(struct dsa_switch *ds, int port,
-+			      struct net_device *hsr)
-+{
-+	struct dsa_port *dp = dsa_to_port(ds, port), *other_dp;
-+
-+	dsa_hsr_foreach_port(other_dp, ds, hsr) {
-+		if (other_dp != dp) {
-+			dp->user->features &= ~NETIF_F_HW_HSR_DUP;
-+			other_dp->user->features &= ~NETIF_F_HW_HSR_DUP;
-+			break;
-+		}
-+	}
-+
-+	return 0;
-+}
-+EXPORT_SYMBOL_GPL(dsa_port_simple_hsr_leave);
-+
- static const struct dsa_stubs __dsa_stubs = {
- 	.conduit_hwtstamp_validate = __dsa_conduit_hwtstamp_validate,
- };
-
-diff --git a/net/dsa/tag.h b/net/dsa/tag.h
-index 5d80dda..cf52283 100644
---- a/net/dsa/tag.h
-+++ b/net/dsa/tag.h
-@@ -319,6 +319,24 @@ static inline void *dsa_etype_header_pos_tx(struct sk_buff *skb)
- 	return skb->data + 2 * ETH_ALEN;
- }
- 
-+static inline unsigned long dsa_xmit_port_mask(const struct sk_buff *skb,
-+					       const struct net_device *dev)
-+{
-+	struct dsa_port *dp = dsa_user_to_port(dev);
-+	unsigned long mask = BIT(dp->index);
-+
-+	if (IS_ENABLED(CONFIG_HSR) &&
-+	    unlikely(dev->features & NETIF_F_HW_HSR_DUP)) {
-+		struct net_device *hsr_dev = dp->hsr_dev;
-+		struct dsa_port *other_dp;
-+
-+		dsa_hsr_foreach_port(other_dp, dp->ds, hsr_dev)
-+			mask |= BIT(other_dp->index);
-+	}
-+
-+	return mask;
-+}
-+
- /* Create 2 modaliases per tagging protocol, one to auto-load the module
-  * given the ID reported by get_tag_protocol(), and the other by name.
-  */
--- 
-2.43.0
-

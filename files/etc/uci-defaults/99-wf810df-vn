@@ -6,4 +6,11 @@ set system.@system[0].zonename='Asia/Ho Chi Minh'
 set system.@system[0].timezone='<+07>-7'
 commit system
 EOF
+
+# IPQ5018 chi co 1 hang doi nhan (RX) -> moi goi mang do 1 nhan CPU xu ly.
+# Bat packet steering de chia cho ca 2 nhan: WAN->LAN tu ~600-700 len ~940 Mbps
+# (greenhope do tren VOZ, 17/5/2026).
+uci -q get network.globals >/dev/null || uci -q set network.globals=globals
+uci -q set network.globals.packet_steering='1'
+uci -q commit network
 exit 0

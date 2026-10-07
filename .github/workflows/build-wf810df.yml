@@ -2,7 +2,7 @@ name: Build WF810DF - ImmortalWrt tu ma nguon
 
 # Dong firmware ImmortalWrt cho FPT AX3000CV2 (Actiontec/CIG WF-810DF, IPQ5018)
 # bang cach BIEN DICH TU MA NGUON ImmortalWrt chinh hang + phan ho tro thiet bi
-# lay tu michioxd/openwrt-wf810df (DTS, driver switch YT921x, cau hinh).
+# lay tu zcop/immortalwrt nhanh wf810df-25.12 (DTS, driver switch YT921x, cau hinh).
 # Mat khoang 2-4 gio cho 1 lan build.
 
 on:
@@ -67,7 +67,7 @@ jobs:
           cp ../config/wf810df.seed .config
           for p in ${{ inputs.extra_packages }}; do echo "CONFIG_PACKAGE_$p=y" >> .config; done
           make defconfig
-          grep -q '^CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_fpt_ax3000cv2=y' .config || { echo "LOI: khong chon duoc thiet bi"; exit 1; }
+          grep -q '^CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_wf810df=y' .config || { echo "LOI: khong chon duoc thiet bi"; exit 1; }
           grep -q '^CONFIG_PACKAGE_default-settings-chn=y' .config && { echo "LOI: van con default-settings-chn"; exit 1; }
           for p in ${{ inputs.extra_packages }}; do
             grep -q "^CONFIG_PACKAGE_$p=y" .config || { echo "LOI: goi '$p' khong ton tai hoac thieu phu thuoc"; exit 1; }
@@ -92,18 +92,18 @@ jobs:
           OUT=bin/targets/qualcommax/ipq50xx
           ls -l $OUT
           for s in squashfs-factory.ubi squashfs-sysupgrade.bin initramfs-uImage.itb; do
-            ls $OUT/*fpt_ax3000cv2*-$s >/dev/null 2>&1 || { echo "LOI: thieu file *-$s"; exit 1; }
+            ls $OUT/*wf810df*-$s >/dev/null 2>&1 || { echo "LOI: thieu file *-$s"; exit 1; }
           done
-          M=$(ls $OUT/*fpt_ax3000cv2*.manifest | head -1)
-          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-mdio-gpio luci; do
+          M=$(ls $OUT/*wf810df*.manifest | head -1)
+          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-dsa-yt921x luci; do
             grep -q "^$k " "$M" && echo "OK  $k" || { echo "THIEU $k"; exit 1; }
           done
           grep -q "^default-settings-chn " "$M" && { echo "LOI: con default-settings-chn"; exit 1; }
-          strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-ax3000cv2.dtb | grep -q "fpt,ax3000cv2" \
+          strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-wf810df.dtb | grep -q "fpt,wf810df" \
             && echo "OK  DTB AX3000CV2" || { echo "LOI: DTB khong phai AX3000CV2"; exit 1; }
-          grep -q "CONFIG_NET_DSA_YT921X=y" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
+          grep -q "CONFIG_NET_DSA_YT921X=[ym]" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
             && echo "OK  driver switch YT921x" || { echo "LOI: kernel thieu driver YT921x"; exit 1; }
-          cd $OUT && sha256sum *fpt_ax3000cv2* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
+          cd $OUT && sha256sum *wf810df* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
 
       - name: 11. Dong goi kmod (de cai them bang apk)
         working-directory: iw
@@ -117,7 +117,7 @@ jobs:
         with:
           name: wf810df-${{ inputs.iw_ref }}-b${{ github.run_number }}
           path: |
-            iw/bin/targets/qualcommax/ipq50xx/*fpt_ax3000cv2*
+            iw/bin/targets/qualcommax/ipq50xx/*wf810df*
             iw/bin/targets/qualcommax/ipq50xx/sha256sums-wf810df.txt
             diffconfig.txt
 
@@ -132,9 +132,9 @@ jobs:
             - `*-initramfs-uImage.itb`: chay thu trong RAM, khong ghi NAND.
             - `*-sysupgrade.bin`: nang cap tu LuCI khi da chay ImmortalWrt.
             - `kmods-wf810df.tar.gz`: toan bo kmod cua dung kernel nay.
-            Trang thai: 3 cong LAN (switch YT9215S) CHUA hoat dong, NSS chua hoat dong.
+            Nen thiet bi: zcop/immortalwrt wf810df-25.12. NSS chua co. Chua kiem chung tren may that: hay chay thu initramfs truoc.
           files: |
-            iw/bin/targets/qualcommax/ipq50xx/*fpt_ax3000cv2*
+            iw/bin/targets/qualcommax/ipq50xx/*wf810df*
             iw/bin/targets/qualcommax/ipq50xx/sha256sums-wf810df.txt
             iw/kmods-wf810df.tar.gz
             diffconfig.txt
