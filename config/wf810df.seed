@@ -1,7 +1,7 @@
 # Thiet bi
 CONFIG_TARGET_qualcommax=y
 CONFIG_TARGET_qualcommax_ipq50xx=y
-CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_fpt_ax3000cv2=y
+CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_wf810df=y
 
 # Ban chay thu trong RAM (khong ghi NAND): tftpboot + bootm
 CONFIG_TARGET_ROOTFS_INITRAMFS=y

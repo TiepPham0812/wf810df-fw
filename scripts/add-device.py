@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
 """
-Them ho tro FPT AX3000CV2 (WF-810DF, IPQ5018) vao cay nguon ImmortalWrt.
+Them ho tro FPT AX3000CV2 (Actiontec WF-810DF, IPQ5018) vao cay nguon ImmortalWrt.
 
 Cach dung:  python3 scripts/add-device.py <thu-muc-nguon-immortalwrt>
 
-- Chep file trong device/ (DTS + ban va driver switch YT921x) vao cay nguon.
-- Sua cac file cau hinh chung cua ipq50xx bang cach CHEN them dong,
-  khong ghi de ca file -> van giu nguyen cac thiet bi khac cua ImmortalWrt.
-- Chay lai nhieu lan van an toan (bo qua neu da them).
-- Gap cho nao khong tim thay moc de chen thi DUNG NGAY (exit 1),
-  khong de build tiep voi cau hinh thieu.
+Nen tang thiet bi lay tu zcop/immortalwrt nhanh wf810df-25.12 (LAN + Wi-Fi da
+bring-up, xac nhan tren VOZ): DTS ipq5018-wf810df, driver switch YT921x
+(backport v6.19 + 2 ban hack: SGMII/REVSGMII va bo qua reset cung).
+
+- Chep file trong device/ vao cay nguon.
+- Sua cac file chung cua ipq50xx bang cach CHEN them, khong ghi de ca file.
+- Chay lai nhieu lan van an toan.
+- Khong tim thay moc de chen thi DUNG NGAY (exit 1).
 """
 import os
 import re
 import shutil
 import sys
 
-BOARD = "fpt,ax3000cv2"
-DEVICE = "fpt_ax3000cv2"
+BOARDS = ["fpt,ax3000cv2", "fpt,wf810df"]      # board_name co the la 1 trong 2
+CASE = "|\\\n\t".join(BOARDS)                  # "fpt,ax3000cv2|\\\n\tfpt,wf810df"
+DEVICE = "wf810df"
 
 
 def die(msg):
@@ -37,22 +40,12 @@ def write(path, text):
         f.write(text)
 
 
-def insert_before(path, text, anchor_regex, block, count=1):
-    """Chen block truoc moc anchor_regex (dung count lan dau tien)."""
-    m = list(re.finditer(anchor_regex, text, flags=re.M))
-    if len(m) < count:
-        die(f"{path}: khong tim thay moc '{anchor_regex}'")
-    out = text
-    for match in reversed(m[:count]):
-        out = out[: match.start()] + block + out[match.start():]
-    return out
-
-
 def main():
     if len(sys.argv) != 2:
         die("can 1 tham so: thu muc nguon ImmortalWrt")
     src = os.path.abspath(sys.argv[1])
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    q = os.path.join(src, "target/linux/qualcommax")
 
     # 1. Chep DTS + ban va kernel
     dev = os.path.join(repo, "device")
@@ -64,9 +57,39 @@ def main():
             shutil.copy2(s, d)
             print(f"chep  {os.path.relpath(d, src)}")
 
-    q = os.path.join(src, "target/linux/qualcommax")
+    # 2. Goi kmod-dsa-yt921x (driver switch dang module)
+    p = os.path.join(src, "package/kernel/linux/modules/netdevices.mk")
+    t = read(p)
+    if "KernelPackage/dsa-yt921x" not in t:
+        t = t.rstrip("\n") + """
 
-    # 2. Khai bao image (Makefile ipq50xx)
+
+define KernelPackage/dsa-yt921x
+  SUBMENU:=$(NETWORK_DEVICES_MENU)
+  TITLE:=Motorcomm YT921x DSA switch support
+  DEPENDS:=+kmod-dsa
+  KCONFIG:= \\
+	CONFIG_NET_DSA_YT921X \\
+	CONFIG_NET_DSA_TAG_YT921X
+  FILES:= \\
+	$(LINUX_DIR)/drivers/net/dsa/yt921x.ko \\
+	$(LINUX_DIR)/net/dsa/tag_yt921x.ko
+  AUTOLOAD:=$(call AutoLoad,30,tag_yt921x yt921x)
+endef
+
+define KernelPackage/dsa-yt921x/description
+ Kernel module for Motorcomm YT9215/YT9218 DSA switch and tag protocol
+endef
+
+$(eval $(call KernelPackage,dsa-yt921x))
+"""
+        if "define KernelPackage/dsa\n" not in t:
+            die("netdevices.mk khong co kmod-dsa")
+        write(p, t)
+        print("sua   netdevices.mk (kmod-dsa-yt921x)")
+
+    # 3. Khai bao image. DEVICE_DTS_CONFIG de U-Boot goc (bootipq) chon dung cau hinh.
+    #    Board data Wi-Fi nam o files/ nen khong dung ipq-wifi-wf810df.
     p = os.path.join(q, "image/ipq50xx.mk")
     t = read(p)
     if f"define Device/{DEVICE}" not in t:
@@ -78,43 +101,49 @@ def main():
 define Device/{DEVICE}
 	$(call Device/FitImage)
 	$(call Device/UbiFit)
+	DEVICE_DTS := ipq5018-wf810df
+	DEVICE_DTS_CONFIG := config@mp03.3-c3
 	DEVICE_VENDOR := FPT
 	DEVICE_MODEL := AX3000CV2
 	DEVICE_ALT0_VENDOR := Actiontec
-	DEVICE_ALT0_MODEL := WF-810DF
+	DEVICE_ALT0_MODEL := WF810DF
+	SUPPORTED_DEVICES += fpt_ax3000cv2 fpt,ax3000cv2 actiontec,wf810df
 	SOC := ipq5018
 	BLOCKSIZE := 128k
 	PAGESIZE := 2048
 	NAND_SIZE := 256m
 	UBINIZE_OPTS := -E 5
 	DEVICE_PACKAGES := ath11k-firmware-ipq5018-qcn6122 \\
-		kmod-gpio-pwm kmod-leds-pwm kmod-mdio-gpio
+		kmod-dsa-yt921x kmod-mdio-gpio
 endef
 TARGET_DEVICES += {DEVICE}
 """
         write(p, t)
         print("sua   image/ipq50xx.mk")
 
-    # 3. Cau hinh cong mang: lan1-3 + wan
+    # 4. Cong mang: lan1-3 + wan
     p = os.path.join(q, "ipq50xx/base-files/etc/board.d/02_network")
     t = read(p)
-    if BOARD not in t:
-        t = insert_before(p, t, r"^\tesac\n\}",
-                          f'\t{BOARD})\n\t\tucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"\n\t\t;;\n')
+    if BOARDS[0] not in t:
+        m = re.search(r"^\tesac\n\}", t, flags=re.M)
+        if not m:
+            die(f"{p}: khong tim thay moc esac")
+        block = f'\t{CASE})\n\t\tucidef_set_interfaces_lan_wan "lan1 lan2 lan3" "wan"\n\t\t;;\n'
+        t = t[: m.start()] + block + t[m.start():]
         write(p, t)
         print("sua   board.d/02_network")
 
-    # 4. Du lieu hieu chuan Wi-Fi tu phan vung ART + MAC tu APPSBLENV
+    # 5. Hieu chuan Wi-Fi tu ART. 5 GHz = 0x26800 (zcop + greenhope sua tu 0x4C000).
     p = os.path.join(q, "ipq50xx/base-files/etc/hotplug.d/firmware/11-ath11k-caldata")
     t = read(p)
-    if BOARD not in t:
+    if BOARDS[0] not in t:
         blocks = {
             r'"ath11k/IPQ5018/hw1\.0/cal-ahb-c000000\.wifi\.bin"\)\n\tcase "\$board" in\n':
-                f'\t{BOARD})\n\t\tcaldata_extract "0:ART" 0x1000 0x20000\n'
+                f'\t{CASE})\n\t\tcaldata_extract "0:ART" 0x1000 0x20000\n'
                 f'\t\tlabel_mac=$(mtd_get_mac_ascii 0:APPSBLENV ethaddr)\n'
                 f'\t\tath11k_patch_mac $label_mac 0\n\t\tath11k_set_macflag\n\t\t;;\n',
             r'"ath11k/QCN6122/hw1\.0/cal-ahb-b00a040\.wifi\.bin"\)\n\tcase "\$board" in\n':
-                f'\t{BOARD})\n\t\tcaldata_extract "0:ART" 0x4C000 0x20000\n'
+                f'\t{CASE})\n\t\tcaldata_extract "0:ART" 0x26800 0x20000\n'
                 f'\t\tlabel_mac=$(mtd_get_mac_ascii 0:APPSBLENV ethaddr)\n'
                 f'\t\tath11k_patch_mac $(macaddr_add $label_mac 2) 0\n\t\tath11k_set_macflag\n\t\t;;\n',
         }
@@ -126,50 +155,29 @@ TARGET_DEVICES += {DEVICE}
         write(p, t)
         print("sua   hotplug.d/firmware/11-ath11k-caldata")
 
-    # 5. Nang cap (sysupgrade): dung chung kieu voi zyxel,scr50axe
+    # 6. sysupgrade: dung chung kieu voi zyxel,scr50axe
     p = os.path.join(q, "ipq50xx/base-files/lib/upgrade/platform.sh")
     t = read(p)
-    if BOARD not in t:
-        if "\tzyxel,scr50axe)\n\t\tCI_UBIPART=\"rootfs\"" not in t:
+    if BOARDS[0] not in t:
+        old = "\tzyxel,scr50axe)\n\t\tCI_UBIPART=\"rootfs\""
+        if old not in t:
             die(f"{p}: khoi zyxel,scr50axe da doi, can xem lai")
-        t = t.replace("\tzyxel,scr50axe)\n\t\tCI_UBIPART=\"rootfs\"",
-                      f"\tzyxel,scr50axe|\\\n\t{BOARD})\n\t\tCI_UBIPART=\"rootfs\"", 1)
+        t = t.replace(old, f"\tzyxel,scr50axe|\\\n\t{CASE})\n\t\tCI_UBIPART=\"rootfs\"", 1)
         write(p, t)
         print("sua   lib/upgrade/platform.sh")
 
-    # 6. fw_printenv/fw_setenv: dung chung kieu voi glinet,gl-b3000
+    # 7. fw_printenv/fw_setenv
     p = os.path.join(src, "package/boot/uboot-tools/uboot-envtools/files/qualcommax_ipq50xx")
     t = read(p)
-    if BOARD not in t:
+    if BOARDS[0] not in t:
         if "glinet,gl-b3000)\n" not in t:
             die(f"{p}: khong thay glinet,gl-b3000")
-        t = t.replace("glinet,gl-b3000)\n", f"glinet,gl-b3000|\\\n{BOARD})\n", 1)
+        t = t.replace("glinet,gl-b3000)\n",
+                      "glinet,gl-b3000|\\\n" + "|\\\n".join(BOARDS) + ")\n", 1)
         write(p, t)
         print("sua   uboot-envtools/qualcommax_ipq50xx")
 
-    # 7. Cau hinh kernel: driver switch YT921x + MDIO bit-bang
-    def set_cfg(path, keys):
-        t = read(path)
-        for k in keys:
-            t = re.sub(rf"^# {k} is not set\n", "", t, flags=re.M)
-            if not re.search(rf"^{k}=y$", t, flags=re.M):
-                t = t.rstrip("\n") + f"\n{k}=y\n"
-        write(path, t)
-        print(f"sua   {os.path.relpath(path, src)}")
-
-    set_cfg(os.path.join(q, "ipq50xx/config-default"),
-            ["CONFIG_NET_DSA_YT921X", "CONFIG_NET_DSA_TAG_YT921X"])
-    # 2 tuy chon phu cua driver: tat, khai bao ro de kernel khong hoi khi build
-    p = os.path.join(q, "ipq50xx/config-default")
-    t = read(p)
-    for k in ("CONFIG_NET_DSA_YT921X_DEBUG", "CONFIG_NET_DSA_YT921X_CR881X"):
-        if k not in t:
-            t = t.rstrip("\n") + f"\n# {k} is not set\n"
-    write(p, t)
-    set_cfg(os.path.join(q, "config-6.12"),
-            ["CONFIG_MOTORCOMM_PHY", "CONFIG_MDIO_GPIO"])
-
-    print("XONG: da them FPT AX3000CV2 vao", src)
+    print("XONG: da them FPT AX3000CV2 (wf810df) vao", src)
 
 
 if __name__ == "__main__":
