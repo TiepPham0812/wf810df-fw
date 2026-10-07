@@ -103,8 +103,15 @@ jobs:
             && echo "OK  DTB AX3000CV2" || { echo "LOI: DTB khong phai AX3000CV2"; exit 1; }
           grep -q "CONFIG_NET_DSA_YT921X=[ym]" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
             && echo "OK  driver switch YT921x" || { echo "LOI: kernel thieu driver YT921x"; exit 1; }
+          # --- THEM: kiem tra metadata sysupgrade ---
+          SU=$(ls $OUT/*wf810df*-squashfs-sysupgrade.bin)
+          for b in fpt,wf810df fpt,ax3000cv2; do
+            tail -c 4096 "$SU" | strings | grep -q "\"$b\"" \
+              && echo "OK  sysupgrade ho tro $b" || { echo "LOI: metadata thieu $b"; exit 1; }
+          done
+          # --- HET PHAN THEM ---
           cd $OUT && sha256sum *wf810df* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
-
+          
       - name: 11. Dong goi kmod (de cai them bang apk)
         working-directory: iw
         run: |
