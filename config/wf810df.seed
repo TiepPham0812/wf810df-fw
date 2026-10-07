@@ -1,0 +1,27 @@
+# Thiet bi
+CONFIG_TARGET_qualcommax=y
+CONFIG_TARGET_qualcommax_ipq50xx=y
+CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_fpt_ax3000cv2=y
+
+# Ban chay thu trong RAM (khong ghi NAND): tftpboot + bootm
+CONFIG_TARGET_ROOTFS_INITRAMFS=y
+CONFIG_TARGET_INITRAMFS_COMPRESSION_ZSTD=y
+
+# Build san TAT CA kmod thanh goi rieng (khong nhet vao firmware).
+# Kernel tu build nen kho kmod chinh hang khong cai duoc -> lay kmod tu Releases.
+CONFIG_ALL_KMODS=y
+
+# Bo goi doi kho sang mirror Trung Quoc + mui gio Thuong Hai
+# CONFIG_PACKAGE_default-settings-chn is not set
+CONFIG_PACKAGE_default-settings=y
+
+# Giao dien
+CONFIG_PACKAGE_luci=y
+CONFIG_LUCI_LANG_vi=y
+CONFIG_PACKAGE_luci-i18n-base-vi=y
+
+# Goi co ban them (nho, huu ich)
+CONFIG_PACKAGE_luci-app-ttyd=y
+CONFIG_PACKAGE_htop=y
+CONFIG_PACKAGE_ethtool=y
+CONFIG_PACKAGE_tcpdump-mini=y

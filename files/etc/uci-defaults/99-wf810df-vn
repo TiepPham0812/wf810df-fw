@@ -1,0 +1,9 @@
+#!/bin/sh
+# Mui gio Viet Nam, ten may de nhan biet
+uci -q batch <<'EOF'
+set system.@system[0].hostname='WF810DF'
+set system.@system[0].zonename='Asia/Ho Chi Minh'
+set system.@system[0].timezone='<+07>-7'
+commit system
+EOF
+exit 0

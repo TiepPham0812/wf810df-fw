@@ -1,0 +1,56 @@
+name: Claude Auto-Fix Build
+
+# Khi workflow build firmware that bai, Claude tu doc log loi va
+# mo Issue (loi tam thoi) hoac Pull Request (loi cau hinh). KHONG tu merge.
+
+on:
+  workflow_run:
+    workflows: ["Build WF810DF - ImmortalWrt tu ma nguon"]
+    types: [completed]
+
+concurrency:
+  group: claude-autofix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Workflow build firmware vua that bai.
+            Repo: ${{ github.repository }}
+            Run ID: ${{ github.event.workflow_run.id }}
+            Link: ${{ github.event.workflow_run.html_url }}
+
+            Doc CLAUDE.md truoc, roi lam theo dung thu tu:
+            1. Chay `gh run view ${{ github.event.workflow_run.id }} --repo ${{ github.repository }} --log-failed`
+               de lay log loi. Chi doc phan loi, khong tai toan bo log.
+            2. Xac dinh nguyen nhan goc va phan loai:
+               - Loi tam thoi (mang, mirror ImmortalWrt khong tai duoc, timeout, runner GitHub loi):
+                 tao Issue tieu de "[Build loi] <tom tat>" giai thich nguyen nhan va de nghi chay lai.
+                 KHONG sua code.
+               - Loi do cau hinh/script/goi trong repo: tao branch moi ten `claude/fix-${{ github.event.workflow_run.id }}`,
+                 sua toi thieu, commit, push branch, mo Pull Request vao nhanh `${{ github.event.workflow_run.head_branch }}`.
+                 Mo ta PR bang tieng Viet: nguyen nhan, dong log loi chinh, thay doi da lam, rui ro.
+               - Khong chac chan: chi tao Issue mo ta phan tich, khong sua code.
+            3. Tuyet doi khong push thang vao nhanh chinh, khong tu merge PR.
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Bash(gh run view:*),Bash(gh issue create:*),Bash(gh pr create:*),Bash(git checkout:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git status:*),Bash(git diff:*),Read,Edit,Write,Grep,Glob"

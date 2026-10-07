@@ -1,0 +1,140 @@
+name: Build WF810DF - ImmortalWrt tu ma nguon
+
+# Dong firmware ImmortalWrt cho FPT AX3000CV2 (Actiontec/CIG WF-810DF, IPQ5018)
+# bang cach BIEN DICH TU MA NGUON ImmortalWrt chinh hang + phan ho tro thiet bi
+# lay tu michioxd/openwrt-wf810df (DTS, driver switch YT921x, cau hinh).
+# Mat khoang 2-4 gio cho 1 lan build.
+
+on:
+  workflow_dispatch:
+    inputs:
+      iw_ref:
+        description: "Phien ban ImmortalWrt (tag vd v25.12.2, hoac nhanh openwrt-25.12)"
+        default: "v25.12.2"
+        required: true
+      extra_packages:
+        description: "Goi cai them vao firmware, cach nhau dau cach (de trong neu khong can)"
+        default: ""
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: 1. Lay ma nguon repo
+        uses: actions/checkout@v6
+
+      - name: 2. Don dung luong o dia (build can ~30 GB)
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          df -h /
+
+      - name: 3. Cai cong cu build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev python3-setuptools rsync swig unzip zlib1g-dev \
+            file wget zstd xz-utils python3-dev libelf-dev
+
+      - name: 4. Tai ma nguon ImmortalWrt chinh hang
+        run: |
+          git clone --depth 1 -b "${{ inputs.iw_ref }}" https://github.com/immortalwrt/immortalwrt.git iw
+          cd iw && git log -1 --format='ImmortalWrt: %H %cd'
+          cat target/linux/generic/kernel-6.12 | head -1
+
+      - name: 5. Cap nhat feeds
+        working-directory: iw
+        run: |
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: 6. Them ho tro FPT AX3000CV2
+        run: |
+          python3 scripts/add-device.py iw
+          # files/ = noi dung chep thang vao firmware (board-2.bin Wi-Fi, mui gio VN)
+          cp -a files iw/files
+          sed -i 's/\r$//' iw/files/etc/uci-defaults/*; chmod 755 iw/files/etc/uci-defaults/*
+
+      - name: 7. Tao cau hinh
+        working-directory: iw
+        run: |
+          cp ../config/wf810df.seed .config
+          for p in ${{ inputs.extra_packages }}; do echo "CONFIG_PACKAGE_$p=y" >> .config; done
+          make defconfig
+          grep -q '^CONFIG_TARGET_qualcommax_ipq50xx_DEVICE_fpt_ax3000cv2=y' .config || { echo "LOI: khong chon duoc thiet bi"; exit 1; }
+          grep -q '^CONFIG_PACKAGE_default-settings-chn=y' .config && { echo "LOI: van con default-settings-chn"; exit 1; }
+          for p in ${{ inputs.extra_packages }}; do
+            grep -q "^CONFIG_PACKAGE_$p=y" .config || { echo "LOI: goi '$p' khong ton tai hoac thieu phu thuoc"; exit 1; }
+          done
+          ./scripts/diffconfig.sh > ../diffconfig.txt
+          cat ../diffconfig.txt
+
+      - name: 8. Tai ma nguon cac goi
+        working-directory: iw
+        run: make download -j8 || make download -j1 V=s
+
+      - name: 9. Bien dich (2-4 gio)
+        working-directory: iw
+        run: |
+          echo "Bat dau: $(date)"
+          make -j$(($(nproc)+1)) || { echo "=== Loi, chay lai 1 luong de xem log chi tiet ==="; make -j1 V=s; }
+          echo "Xong: $(date)"; df -h /
+
+      - name: 10. Kiem tra firmware
+        working-directory: iw
+        run: |
+          OUT=bin/targets/qualcommax/ipq50xx
+          ls -l $OUT
+          for s in squashfs-factory.ubi squashfs-sysupgrade.bin initramfs-uImage.itb; do
+            ls $OUT/*fpt_ax3000cv2*-$s >/dev/null 2>&1 || { echo "LOI: thieu file *-$s"; exit 1; }
+          done
+          M=$(ls $OUT/*fpt_ax3000cv2*.manifest | head -1)
+          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-mdio-gpio luci; do
+            grep -q "^$k " "$M" && echo "OK  $k" || { echo "THIEU $k"; exit 1; }
+          done
+          grep -q "^default-settings-chn " "$M" && { echo "LOI: con default-settings-chn"; exit 1; }
+          strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-ax3000cv2.dtb | grep -q "fpt,ax3000cv2" \
+            && echo "OK  DTB AX3000CV2" || { echo "LOI: DTB khong phai AX3000CV2"; exit 1; }
+          grep -q "CONFIG_NET_DSA_YT921X=y" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
+            && echo "OK  driver switch YT921x" || { echo "LOI: kernel thieu driver YT921x"; exit 1; }
+          cd $OUT && sha256sum *fpt_ax3000cv2* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
+
+      - name: 11. Dong goi kmod (de cai them bang apk)
+        working-directory: iw
+        run: |
+          test -d bin/targets/qualcommax/ipq50xx/packages || { echo "LOI: khong thay thu muc kmod"; exit 1; }
+          tar -C bin/targets/qualcommax/ipq50xx -czf kmods-wf810df.tar.gz packages
+          ls -lh kmods-wf810df.tar.gz
+
+      - name: 12. Luu file len Actions (Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: wf810df-${{ inputs.iw_ref }}-b${{ github.run_number }}
+          path: |
+            iw/bin/targets/qualcommax/ipq50xx/*fpt_ax3000cv2*
+            iw/bin/targets/qualcommax/ipq50xx/sha256sums-wf810df.txt
+            diffconfig.txt
+
+      - name: 13. Dang len Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: wf810df-${{ inputs.iw_ref }}-b${{ github.run_number }}
+          name: WF810DF ImmortalWrt ${{ inputs.iw_ref }} - build ${{ github.run_number }}
+          body: |
+            FPT AX3000CV2 (WF-810DF) - ImmortalWrt ${{ inputs.iw_ref }} bien dich tu ma nguon.
+            - `*-factory.ubi`: nap lan dau qua U-Boot (xem README).
+            - `*-initramfs-uImage.itb`: chay thu trong RAM, khong ghi NAND.
+            - `*-sysupgrade.bin`: nang cap tu LuCI khi da chay ImmortalWrt.
+            - `kmods-wf810df.tar.gz`: toan bo kmod cua dung kernel nay.
+            Trang thai: 3 cong LAN (switch YT9215S) CHUA hoat dong, NSS chua hoat dong.
+          files: |
+            iw/bin/targets/qualcommax/ipq50xx/*fpt_ax3000cv2*
+            iw/bin/targets/qualcommax/ipq50xx/sha256sums-wf810df.txt
+            iw/kmods-wf810df.tar.gz
+            diffconfig.txt
