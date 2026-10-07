@@ -19,6 +19,7 @@ Biên dịch **ImmortalWrt chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vu
 | Cổng CPU ↔ switch | 2500base-x | **SGMII 1000 Mbps** |
 | Hiệu chuẩn 5 GHz | offset `0x4C000` | **`0x26800`** |
 | 3 cổng LAN | không lên link | đã chạy trên bản của zcop |
+| Treo khi khởi động do driver CMN PLL | có nguy cơ | **đã vá** (bản vá của Stanislaw Pal) |
 
 ## Cách build
 
@@ -48,7 +49,7 @@ Biên dịch **ImmortalWrt chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vu
 
 ## Gợi ý sau khi chạy
 
-- Bật **packet steering** (LuCI → Network → Interfaces → Global network options): WAN→LAN từ ~600–700 lên ~940 Mbps theo đo đạc trên VOZ.
+- **Packet steering đã bật sẵn**: WAN→LAN từ ~600–700 lên ~940 Mbps theo đo đạc trên VOZ.
 - Máy có thể lên **80°C+** khi tải nặng lâu — để nơi thoáng.
 
 ## Cảnh báo
