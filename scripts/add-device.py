@@ -107,7 +107,7 @@ define Device/{DEVICE}
 	DEVICE_MODEL := AX3000CV2
 	DEVICE_ALT0_VENDOR := Actiontec
 	DEVICE_ALT0_MODEL := WF810DF
-	SUPPORTED_DEVICES += fpt_ax3000cv2 fpt,ax3000cv2 actiontec,wf810df
+	SUPPORTED_DEVICES += fpt,wf810df fpt_ax3000cv2 fpt,ax3000cv2 actiontec,wf810df
 	SOC := ipq5018
 	BLOCKSIZE := 128k
 	PAGESIZE := 2048
