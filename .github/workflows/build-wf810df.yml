@@ -110,6 +110,13 @@ jobs:
               && echo "OK  sysupgrade ho tro $b" || { echo "LOI: metadata thieu $b"; exit 1; }
           done
           # --- HET PHAN THEM ---
+          # Driver ath11k goc khong doc qcom,board_id trong DTS -> firmware bao board-id 255.
+          # board-2.bin phai co ban ghi qmi-board-id=255, neu khong Wi-Fi khong len.
+          for c in IPQ5018 QCN6122; do
+            B=$(ls build_dir/target-*/root-qualcommax*/lib/firmware/ath11k/$c/hw1.0/board-2.bin | head -1)
+            grep -aq "qmi-board-id=255" "$B" \
+              && echo "OK  $c board-2.bin co board-id 255" || { echo "LOI: $c board-2.bin thieu board-id 255"; exit 1; }
+          done
           cd $OUT && sha256sum *wf810df* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
           
       - name: 11. Dong goi kmod (de cai them bang apk)
