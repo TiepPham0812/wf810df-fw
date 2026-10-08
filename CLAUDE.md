@@ -22,6 +22,7 @@
 - Hiệu chuẩn 5 GHz (QCN6122) ở offset **`0x26800`** trong `0:ART` (không phải `0x4C000` của bản michioxd).
 - Board name có thể là `fpt,wf810df` hoặc `fpt,ax3000cv2` — mọi khối `case` phải có cả hai.
 - `qualcommax/patches-6.12/0199-...keep-the-CMN-block-bus-clocks-enabled`: chống treo/boot-loop IPQ5018 khi driver CMN PLL tắt clock bus sau probe (Stanislaw Pal, đã gửi upstream; ImmortalWrt 25.12 chỉ có cho kernel 6.18). **Giữ lại** cho tới khi ImmortalWrt tự có bản vá này cho 6.12 — khi đó xoá bản của mình để tránh trùng.
+- `board-2.bin` (IPQ5018 và QCN6122) phải có thêm bản ghi **`qmi-board-id=255`** (cùng dữ liệu với 35 / 96). ImmortalWrt không có bản vá ath11k `210-...reading-board-id-from-devicetree` của zcop nên firmware báo board-id 255; thiếu bản ghi này thì cả hai radio không lên (đã thấy trên máy thật với bản b2, 08/10/2026). Bước 10 của workflow kiểm tra điều này.
 - Packet steering bật sẵn (`files/etc/uci-defaults/99-wf810df-vn`) vì IPQ5018 chỉ có 1 hàng đợi RX.
 - NAND GD5F2GM7RE: 2 Gbit = 256 MB, trang 2048, khối 128 KB — khớp `PAGESIZE`/`BLOCKSIZE`.
 - Không thêm biến thể `ath11k-smallbuffers`: PR OpenWrt #21495 chưa merge, còn lỗi Kconfig, và máy có 512 MB RAM nên không cần.
