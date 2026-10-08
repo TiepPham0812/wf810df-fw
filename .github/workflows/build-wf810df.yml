@@ -147,8 +147,9 @@ jobs:
             - `*-sysupgrade.bin`: nang cap tu LuCI khi da chay ImmortalWrt.
             - `kmods-wf810df.tar.gz`: toan bo kmod cua dung kernel nay.
             Nen thiet bi: zcop/immortalwrt wf810df-25.12. NSS chua co. Chua kiem chung tren may that: hay chay thu initramfs truoc.
+          # *wf810df* da gom ca sha256sums-wf810df.txt; liet ke them lan nua se
+          # tai trung 1 file -> loi "Not Found" (update-a-release-asset) o build 3.
           files: |
             iw/bin/targets/qualcommax/ipq50xx/*wf810df*
-            iw/bin/targets/qualcommax/ipq50xx/sha256sums-wf810df.txt
             iw/kmods-wf810df.tar.gz
             diffconfig.txt
