@@ -25,3 +25,9 @@ CONFIG_PACKAGE_luci-app-ttyd=y
 CONFIG_PACKAGE_htop=y
 CONFIG_PACKAGE_ethtool=y
 CONFIG_PACKAGE_tcpdump-mini=y
+
+# Tailscale: phai nam san trong firmware vi kmod-tun tu kho chinh hang
+# khong khop kernel tu build -> "apk add tailscale" bi loi phu thuoc.
+CONFIG_PACKAGE_kmod-tun=y
+CONFIG_PACKAGE_tailscale=y
+CONFIG_PACKAGE_luci-app-tailscale-community=y
