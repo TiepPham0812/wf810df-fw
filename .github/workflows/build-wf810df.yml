@@ -95,7 +95,7 @@ jobs:
             ls $OUT/*wf810df*-$s >/dev/null 2>&1 || { echo "LOI: thieu file *-$s"; exit 1; }
           done
           M=$(ls $OUT/*wf810df*.manifest | head -1)
-          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-dsa-yt921x luci; do
+          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-dsa-yt921x luci kmod-tun tailscale luci-app-tailscale-community; do
             grep -q "^$k " "$M" && echo "OK  $k" || { echo "THIEU $k"; exit 1; }
           done
           grep -q "^default-settings-chn " "$M" && { echo "LOI: con default-settings-chn"; exit 1; }
