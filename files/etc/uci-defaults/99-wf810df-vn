@@ -1,11 +1,17 @@
 #!/bin/sh
-# Mui gio Viet Nam, ten may de nhan biet
-uci -q batch <<'EOF'
-set system.@system[0].hostname='WF810DF'
+# Ten may: chi dat WF810DF khi con ten mac dinh. Router da dat ten rieng
+# (vd WF810DF-2) thi giu nguyen sau moi lan nap firmware co giu cau hinh.
+case "$(uci -q get system.@system[0].hostname)" in
+	''|ImmortalWrt|OpenWrt)
+		uci -q set system.@system[0].hostname='WF810DF'
+		;;
+esac
+# Mui gio Viet Nam
+uci -q batch <<'EOT'
 set system.@system[0].zonename='Asia/Ho Chi Minh'
 set system.@system[0].timezone='<+07>-7'
 commit system
-EOF
+EOT
 
 # IPQ5018 chi co 1 hang doi nhan (RX) -> moi goi mang do 1 nhan CPU xu ly.
 # Bat packet steering de chia cho ca 2 nhan: WAN->LAN tu ~600-700 len ~940 Mbps
@@ -13,4 +19,8 @@ EOF
 uci -q get network.globals >/dev/null || uci -q set network.globals=globals
 uci -q set network.globals.packet_steering='1'
 uci -q commit network
+
+# Kho "video" khong co tren may chu ImmortalWrt (404) -> tat de "apk update" khong bao loi.
+F=/etc/apk/repositories.d/distfeeds.list
+[ -f "$F" ] && sed -i 's|^\([^#].*/video/packages\.adb\)$|# \1|' "$F"
 exit 0

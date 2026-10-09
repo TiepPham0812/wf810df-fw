@@ -19,10 +19,16 @@ on:
 
 permissions:
   contents: write
+  pages: write      # dang kho kmod len GitHub Pages (buoc 14)
+  id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-24.04
+    # Moi truong github-pages: can de buoc 14 dang kho kmod.
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
     timeout-minutes: 350
     steps:
       - name: 1. Lay ma nguon repo
@@ -60,6 +66,27 @@ jobs:
           # files/ = noi dung chep thang vao firmware (board-2.bin Wi-Fi, mui gio VN)
           cp -a files iw/files
           sed -i 's/\r$//' iw/files/etc/uci-defaults/*; chmod 755 iw/files/etc/uci-defaults/*
+
+      - name: 6b. Khoa ky goi + kho kmod rieng (GitHub Pages)
+        env:
+          APK_SIGN_KEY: ${{ secrets.APK_SIGN_KEY }}
+        run: |
+          # Kho kmod rieng: kernel tu build nen kmod kho chinh hang khong cai duoc.
+          # Router doc them kho nay -> "apk add kmod-xxx" chay thang.
+          KMOD_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/packages/packages.adb"
+          mkdir -p iw/files/etc/apk/repositories.d
+          printf '# Kho kmod cua dung kernel firmware nay (GitHub Pages, buoc 14)\n%s\n' "$KMOD_URL" \
+            > iw/files/etc/apk/repositories.d/customfeeds.list
+          cat iw/files/etc/apk/repositories.d/customfeeds.list
+          # Khoa ky co dinh (secret APK_SIGN_KEY) -> moi ban build dung chung 1 khoa,
+          # router o ban cu van tin kho kmod moi. Khong co secret: build tu tao khoa moi.
+          if [ -n "$APK_SIGN_KEY" ]; then
+            printf '%s\n' "$APK_SIGN_KEY" > iw/private-key.pem
+            openssl ec -in iw/private-key.pem -noout && echo "OK  dung khoa ky APK_SIGN_KEY" \
+              || { echo "LOI: APK_SIGN_KEY khong phai khoa EC hop le"; exit 1; }
+          else
+            echo "CANH BAO: chua co secret APK_SIGN_KEY - khoa ky doi theo tung ban build"
+          fi
 
       - name: 7. Tao cau hinh
         working-directory: iw
@@ -117,6 +144,14 @@ jobs:
             grep -aq "qmi-board-id=255" "$B" \
               && echo "OK  $c board-2.bin co board-id 255" || { echo "LOI: $c board-2.bin thieu board-id 255"; exit 1; }
           done
+          # WAN chi len 100 Mbps khi GE PHY dat qcom,dac-preset-short-cable (giam bien do DAC
+          # cho day ngan noi switch tren mach). O may nay GE PHY ra thang cong WAN RJ45.
+          strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-wf810df.dtb | grep -q "dac-preset-short-cable" \
+            && { echo "LOI: DTB con qcom,dac-preset-short-cable -> WAN se chi chay 100M"; exit 1; } \
+            || echo "OK  GE PHY khong dat dac-preset-short-cable"
+          # Firmware phai tro toi kho kmod rieng
+          grep -q "github.io/.*/packages/packages.adb" build_dir/target-*/root-qualcommax*/etc/apk/repositories.d/customfeeds.list \
+            && echo "OK  customfeeds.list tro toi kho kmod" || { echo "LOI: thieu kho kmod trong customfeeds.list"; exit 1; }
           cd $OUT && sha256sum *wf810df* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
           
       - name: 11. Dong goi kmod (de cai them bang apk)
@@ -153,3 +188,25 @@ jobs:
             iw/bin/targets/qualcommax/ipq50xx/*wf810df*
             iw/kmods-wf810df.tar.gz
             diffconfig.txt
+
+      - name: 14a. Chuan bi kho kmod cho GitHub Pages
+        working-directory: iw
+        run: |
+          P=bin/targets/qualcommax/ipq50xx/packages
+          test -s $P/packages.adb || { echo "LOI: thieu packages.adb (chi muc kho kmod)"; exit 1; }
+          mkdir -p ../pages/packages
+          cp -a $P/. ../pages/packages/
+          cp public-key.pem ../pages/public-key.pem
+          printf '<h1>Kho kmod WF810DF</h1><p>Build %s (%s). Router: xem /etc/apk/repositories.d/customfeeds.list</p>\n' \
+            "${{ github.run_number }}" "${{ inputs.iw_ref }}" > ../pages/index.html
+          touch ../pages/.nojekyll
+          du -sh ../pages; ls ../pages/packages | grep -c '\.apk$'
+
+      - name: 14b. Dang kho kmod len GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: 14c. Trien khai GitHub Pages
+        id: pages
+        uses: actions/deploy-pages@v4
