@@ -189,9 +189,11 @@
 	status = "okay";
 };
 
-&ge_phy {
-	qcom,dac-preset-short-cable;
-};
+/*
+ * Khong dat qcom,dac-preset-short-cable cho &ge_phy: tuy chon nay giam bien do
+ * DAC cho PHY noi day ngan voi chip switch tren mach, con o may nay GE PHY
+ * ra thang cong WAN RJ45 -> WAN chi len 100 Mbps tren day that.
+ */
 
 &dp1 {
 	status = "okay";
