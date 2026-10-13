@@ -46,5 +46,8 @@ CONFIG_PACKAGE_luci-proto-wireguard=y
 # Quan ly file tren router qua LuCI
 CONFIG_PACKAGE_luci-app-filemanager=y
 
-# Bo dem bien dich: workflow luu/khoi phuc thu muc .ccache giua cac lan build
+# Bo dem bien dich: workflow luu/khoi phuc thu muc .ccache giua cac lan build.
+# CCACHE chi hien khi bat DEVEL (muc tuy chon nang cao), thieu dong DEVEL thi
+# make defconfig bo CCACHE di va buoc 7 bao loi.
+CONFIG_DEVEL=y
 CONFIG_CCACHE=y
