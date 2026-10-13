@@ -21,11 +21,15 @@ Biên dịch **ImmortalWrt chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vu
 | 3 cổng LAN | không lên link | đã chạy trên bản của zcop |
 | Treo khi khởi động do driver CMN PLL | có nguy cơ | **đã vá** (bản vá của Stanislaw Pal) |
 
+## Gói có sẵn trong firmware
+
+LuCI tiếng Việt, ttyd, htop, ethtool, tcpdump-mini, **Tailscale**, **WireGuard**, **SQM (cake)**, **File Manager**. Các gói cần kmod phải nằm sẵn ở đây vì kernel tự build (xem mục *Cài gói sau khi nạp*). Bộ gói SQM/WireGuard/File Manager và bộ đệm ccache lấy theo [diepkhoa/sdmc-nr3053-repo](https://github.com/diepkhoa/sdmc-nr3053-repo) (bản NR3053, MediaTek) — chỉ lấy phần dùng chung được, không lấy phần cứng.
+
 ## Cách build
 
 1. Tab **Actions** → **Build WF810DF - ImmortalWrt tu ma nguon** → **Run workflow**.
 2. `iw_ref`: phiên bản ImmortalWrt (vd `v25.12.2`). `extra_packages`: gói thêm (vd `luci-app-sqm wireguard-tools`).
-3. Chờ 2–4 giờ. File ở tab **Releases**:
+3. Chờ 2–4 giờ (lần đầu); các lần sau nhanh hơn nhờ ccache. File ở tab **Releases**:
    - `...-squashfs-factory.ubi` — nạp lần đầu
    - `...-initramfs-uImage.itb` — chạy thử trong RAM, không ghi NAND
    - `...-squashfs-sysupgrade.bin` — nâng cấp về sau từ LuCI

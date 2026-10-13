@@ -99,19 +99,45 @@ jobs:
           for p in ${{ inputs.extra_packages }}; do
             grep -q "^CONFIG_PACKAGE_$p=y" .config || { echo "LOI: goi '$p' khong ton tai hoac thieu phu thuoc"; exit 1; }
           done
+          # Goi lay tu ban NR3053 (seed) phai duoc chon that su, khong bi defconfig bo qua
+          for p in kmod-tun tailscale sqm-scripts kmod-sched-cake luci-app-sqm kmod-wireguard wireguard-tools luci-proto-wireguard luci-app-filemanager; do
+            grep -q "^CONFIG_PACKAGE_$p=y" .config || { echo "LOI: goi '$p' trong seed khong duoc chon"; exit 1; }
+          done
+          grep -q '^CONFIG_CCACHE=y' .config || { echo "LOI: CONFIG_CCACHE chua bat"; exit 1; }
           ./scripts/diffconfig.sh > ../diffconfig.txt
           cat ../diffconfig.txt
+
+      - name: 7b. Khoi phuc bo dem bien dich (ccache)
+        # Lay tu workflow NR3053: build lan sau dung lai ket qua bien dich lan truoc.
+        # Khoa theo iw_ref; doi phien ban ImmortalWrt thi van thu dung cache cu (trung mot phan).
+        uses: actions/cache/restore@v4
+        with:
+          path: iw/.ccache
+          key: ccache-wf810df-${{ inputs.iw_ref }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-wf810df-${{ inputs.iw_ref }}-
+            ccache-wf810df-
 
       - name: 8. Tai ma nguon cac goi
         working-directory: iw
         run: make download -j8 || make download -j1 V=s
 
-      - name: 9. Bien dich (2-4 gio)
+      - name: 9. Bien dich (2-4 gio, nhanh hon khi co ccache)
         working-directory: iw
+        env:
+          CCACHE_MAXSIZE: 3G
         run: |
           echo "Bat dau: $(date)"
           make -j$(($(nproc)+1)) || { echo "=== Loi, chay lai 1 luong de xem log chi tiet ==="; make -j1 V=s; }
           echo "Xong: $(date)"; df -h /
+          CCACHE_DIR=$PWD/.ccache staging_dir/host/bin/ccache -s 2>/dev/null || du -sh .ccache 2>/dev/null || true
+
+      - name: 9b. Luu bo dem bien dich (ca khi build loi)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: iw/.ccache
+          key: ccache-wf810df-${{ inputs.iw_ref }}-${{ github.run_id }}
 
       - name: 10. Kiem tra firmware
         working-directory: iw
@@ -122,7 +148,7 @@ jobs:
             ls $OUT/*wf810df*-$s >/dev/null 2>&1 || { echo "LOI: thieu file *-$s"; exit 1; }
           done
           M=$(ls $OUT/*wf810df*.manifest | head -1)
-          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-dsa-yt921x luci kmod-tun tailscale luci-app-tailscale-community; do
+          for k in kmod-ath11k-ahb ath11k-firmware-ipq5018-qcn6122 kmod-dsa-yt921x luci kmod-tun tailscale luci-app-tailscale-community sqm-scripts kmod-sched-cake luci-app-sqm kmod-wireguard wireguard-tools luci-proto-wireguard luci-app-filemanager; do
             grep -q "^$k " "$M" && echo "OK  $k" || { echo "THIEU $k"; exit 1; }
           done
           grep -q "^default-settings-chn " "$M" && { echo "LOI: con default-settings-chn"; exit 1; }
