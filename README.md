@@ -35,6 +35,16 @@ LuCI tiếng Việt, ttyd, htop, ethtool, tcpdump-mini, **Tailscale**, **WireGua
    - `...-squashfs-sysupgrade.bin` — nâng cấp về sau từ LuCI
    - `kmods-wf810df.tar.gz` — toàn bộ kmod của đúng kernel này
 
+## Kernel đồng bộ với ImmortalWrt chính hãng
+
+Kernel của firmware này có **cùng vermagic với bản ImmortalWrt chính hãng** cùng phiên bản (v25.12.2: `6.12.103`, vermagic `6dc88cd2…`). Hai bên chỉ khác hai module driver switch YT921x mà riêng máy 810 cần. Nhờ vậy:
+
+- **Mọi kmod trong kho chính hãng** cài thẳng được qua LuCI hoặc `apk add`, giống như một router được ImmortalWrt hỗ trợ chính thức.
+- Firmware đã trỏ sẵn tới kho `kmods/` chính hãng; ImmortalWrt chỉ tự thêm dòng này khi build trên máy chủ của họ.
+- Workflow kiểm tra trước khi biên dịch. Nếu cấu hình kernel lệch bản chính hãng, build dừng ở bước 7.
+
+Muốn giữ đồng bộ thì không thêm tùy chọn `CONFIG_KERNEL_*` vào seed, và `iw_ref` phải là tag phát hành.
+
 ## Cài gói sau khi nạp
 
 - **Gói thường** (luci-app-*, công cụ): `apk update && apk add <gói>` từ kho ImmortalWrt.

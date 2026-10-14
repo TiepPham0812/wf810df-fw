@@ -54,6 +54,21 @@ jobs:
           cd iw && git log -1 --format='ImmortalWrt: %H %cd'
           cat target/linux/generic/kernel-6.12 | head -1
 
+      - name: 4b. Lay vermagic kernel ImmortalWrt chinh hang (dong bo kernel)
+        run: |
+          # Firmware dung chung vermagic voi ban chinh hang -> router cai kmod tu kho chinh hang.
+          REF="${{ inputs.iw_ref }}"
+          case "$REF" in v[0-9]*.[0-9]*.[0-9]*) VER=${REF#v} ;; *) echo "LOI: dong bo kernel can tag phat hanh (vd v25.12.2), khong dung nhanh '$REF'"; exit 1 ;; esac
+          URL="https://downloads.immortalwrt.org/releases/$VER/targets/qualcommax/ipq50xx/kmods/"
+          DIRS=$(curl -fsSL --retry 3 "$URL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-[0-9]+-[0-9a-f]{32}' | sort -u)
+          [ "$(echo "$DIRS" | grep -c .)" = 1 ] || { echo "LOI: khong xac dinh duoc thu muc kmods chinh hang tai $URL:"; echo "$DIRS"; exit 1; }
+          KVER=${DIRS%%-*}; REST=${DIRS#*-}; KREL=${REST%%-*}; KHASH=${REST#*-}
+          SRCVER="6.12$(sed -n 's/^LINUX_VERSION-6.12 = //p' iw/target/linux/generic/kernel-6.12)"
+          echo "Chinh hang: kernel $KVER, release $KREL, vermagic $KHASH | Ma nguon: kernel $SRCVER"
+          [ "$KVER" = "$SRCVER" ] || { echo "LOI: kernel ma nguon ($SRCVER) khac ban chinh hang ($KVER)"; exit 1; }
+          { echo "IW_VER=$VER"; echo "OFFICIAL_KVER=$KVER"; echo "OFFICIAL_KREL=$KREL"; echo "OFFICIAL_VERMAGIC=$KHASH"
+            echo "OFFICIAL_KMODS=https://downloads.immortalwrt.org/releases/$VER/targets/qualcommax/ipq50xx/kmods/$DIRS/packages.adb"; } >> "$GITHUB_ENV"
+
       - name: 5. Cap nhat feeds
         working-directory: iw
         run: |
@@ -75,8 +90,13 @@ jobs:
           # Router doc them kho nay -> "apk add kmod-xxx" chay thang.
           KMOD_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/packages/packages.adb"
           mkdir -p iw/files/etc/apk/repositories.d
-          printf '# Kho kmod cua dung kernel firmware nay (GitHub Pages, buoc 14)\n%s\n' "$KMOD_URL" \
-            > iw/files/etc/apk/repositories.d/customfeeds.list
+          {
+            # Kernel dong bo voi ban chinh hang -> dung kho kmods/ chinh hang (ImmortalWrt
+            # chi tu them dong nay khi build tren buildbot cua ho).
+            printf '# Kho kmod ImmortalWrt chinh hang (kernel %s, vermagic %s)\n%s\n' "$OFFICIAL_KVER" "$OFFICIAL_VERMAGIC" "$OFFICIAL_KMODS"
+            # Kmod rieng cua 810 (kmod-dsa-yt921x) + toan bo kmod cua dung ban build nay
+            printf '# Kho kmod cua dung kernel firmware nay (GitHub Pages, buoc 14)\n%s\n' "$KMOD_URL"
+          } > iw/files/etc/apk/repositories.d/customfeeds.list
           cat iw/files/etc/apk/repositories.d/customfeeds.list
           # Khoa ky co dinh (secret APK_SIGN_KEY) -> moi ban build dung chung 1 khoa,
           # router o ban cu van tin kho kmod moi. Khong co secret: build tu tao khoa moi.
@@ -104,6 +124,16 @@ jobs:
             grep -q "^CONFIG_PACKAGE_$p=y" .config || { echo "LOI: goi '$p' trong seed khong duoc chon"; exit 1; }
           done
           grep -q '^CONFIG_CCACHE=y' .config || { echo "LOI: CONFIG_CCACHE chua bat"; exit 1; }
+          # Dong bo kernel: tinh truoc vermagic (truoc khi bien dich 2-4 gio)
+          V=$(../scripts/vermagic.sh .)
+          echo "Vermagic du kien: $V | chinh hang: $OFFICIAL_VERMAGIC"
+          if [ "$V" != "$OFFICIAL_VERMAGIC" ]; then
+            echo "LOI: cau hinh kernel lech ban chinh hang -> kmod chinh hang se khong cai duoc."
+            echo "Nguyen nhan thuong gap: seed/extra_packages them CONFIG_KERNEL_*, bo CONFIG_DEVEL/CONFIG_ALL_KMODS,"
+            echo "hoac them kmod khong co trong ImmortalWrt. Cac dong CONFIG_KERNEL_* hien tai:"
+            grep -E '^(# )?CONFIG_KERNEL_' .config | grep -vE 'BUILD_(USER|DOMAIN)' | head -50
+            exit 1
+          fi
           ./scripts/diffconfig.sh > ../diffconfig.txt
           cat ../diffconfig.txt
 
@@ -175,6 +205,17 @@ jobs:
           strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-wf810df.dtb | grep -q "dac-preset-short-cable" \
             && { echo "LOI: DTB con qcom,dac-preset-short-cable -> WAN se chi chay 100M"; exit 1; } \
             || echo "OK  GE PHY khong dat dac-preset-short-cable"
+          # Dong bo kernel: goi kernel phai mang dung vermagic chinh hang
+          KAPK="kernel-${OFFICIAL_KVER}~${OFFICIAL_VERMAGIC}-r${OFFICIAL_KREL}.apk"
+          test -f "$OUT/packages/$KAPK" && echo "OK  kernel dong bo chinh hang: $KAPK" \
+            || { echo "LOI: khong co $KAPK - kernel KHONG dong bo:"; ls $OUT/packages/kernel-*.apk; exit 1; }
+          grep -qF "$OFFICIAL_KMODS" build_dir/target-*/root-qualcommax*/etc/apk/repositories.d/customfeeds.list \
+            && echo "OK  firmware tro toi kho kmod chinh hang" || { echo "LOI: thieu kho kmod chinh hang trong customfeeds.list"; exit 1; }
+          curl -fsSI --retry 3 "$OFFICIAL_KMODS" >/dev/null && echo "OK  kho kmod chinh hang ton tai" \
+            || { echo "LOI: khong truy cap duoc $OFFICIAL_KMODS"; exit 1; }
+          # Driver switch YT921x van phai co trong kernel (bi bo khoi vermagic, khong bi bo khoi kernel)
+          grep -q "^CONFIG_NET_DSA_YT921X=m" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
+            && echo "OK  YT921x van la module" || { echo "LOI: kernel mat YT921x"; exit 1; }
           # Firmware phai tro toi kho kmod rieng
           grep -q "github.io/.*/packages/packages.adb" build_dir/target-*/root-qualcommax*/etc/apk/repositories.d/customfeeds.list \
             && echo "OK  customfeeds.list tro toi kho kmod" || { echo "LOI: thieu kho kmod trong customfeeds.list"; exit 1; }
@@ -207,6 +248,7 @@ jobs:
             - `*-initramfs-uImage.itb`: chay thu trong RAM, khong ghi NAND.
             - `*-sysupgrade.bin`: nang cap tu LuCI khi da chay ImmortalWrt.
             - `kmods-wf810df.tar.gz`: toan bo kmod cua dung kernel nay.
+            Kernel dong bo ImmortalWrt chinh hang (vermagic ${{ env.OFFICIAL_VERMAGIC }}): cai kmod thang tu kho chinh hang qua LuCI/apk.
             Nen thiet bi: zcop/immortalwrt wf810df-25.12. NSS chua co. Chua kiem chung tren may that: hay chay thu initramfs truoc.
           # *wf810df* da gom ca sha256sums-wf810df.txt; liet ke them lan nua se
           # tai trung 1 file -> loi "Not Found" (update-a-release-asset) o build 3.

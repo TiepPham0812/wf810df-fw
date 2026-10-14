@@ -177,6 +177,23 @@ TARGET_DEVICES += {DEVICE}
         write(p, t)
         print("sua   uboot-envtools/qualcommax_ipq50xx")
 
+    # 8. Dong bo kernel voi ImmortalWrt chinh hang: vermagic bo qua 2 dong YT921x.
+    #    Cau hinh kernel cua 810 = ban chinh hang + CONFIG_NET_DSA_YT921X=m,
+    #    CONFIG_NET_DSA_TAG_YT921X=m (chi them module, khong doi cau truc kernel).
+    #    Bo 2 dong nay khoi phep tinh -> vermagic trung ban chinh hang -> router cai
+    #    duoc kmod tu kho kmods/ chinh hang. Buoc 7/10 cua workflow kiem tra lai.
+    p = os.path.join(src, "include/kernel-defaults.mk")
+    t = read(p)
+    old = "\tgrep '=[ym]' $(LINUX_DIR)/.config.set | LC_ALL=C sort | $(MKHASH) md5 > $(LINUX_DIR)/.vermagic"
+    new = ("\tgrep '=[ym]' $(LINUX_DIR)/.config.set | grep -v -E '^CONFIG_NET_DSA(_TAG)?_YT921X=' "
+           "| LC_ALL=C sort | $(MKHASH) md5 > $(LINUX_DIR)/.vermagic")
+    if new not in t:
+        if t.count(old) != 1:
+            die(f"{p}: dong tinh vermagic da doi, can xem lai")
+        t = t.replace(old, new, 1)
+        write(p, t)
+        print("sua   include/kernel-defaults.mk (vermagic bo qua YT921x)")
+
     print("XONG: da them FPT AX3000CV2 (wf810df) vao", src)
 
 
