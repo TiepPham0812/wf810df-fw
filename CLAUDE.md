@@ -30,6 +30,8 @@
 - `99-wf810df-vn` **không ghi đè tên máy** nếu đã khác mặc định (vd `WF810DF-2`), và tắt dòng kho `video` trong `distfeeds.list` (ImmortalWrt không có kho này, 404).
 - Packet steering bật sẵn (`files/etc/uci-defaults/99-wf810df-vn`) vì IPQ5018 chỉ có 1 hàng đợi RX.
 - NAND GD5F2GM7RE: 2 Gbit = 256 MB, trang 2048, khối 128 KB — khớp `PAGESIZE`/`BLOCKSIZE`.
+- **Gói lấy từ bản NR3053** (diepkhoa/sdmc-nr3053-repo, 13/10/2026): SQM (`sqm-scripts`, `kmod-sched-cake`, `luci-app-sqm`), WireGuard (`kmod-wireguard`, `wireguard-tools`, `luci-proto-wireguard`), `luci-app-filemanager` nằm sẵn trong seed; bước 7 và bước 10 kiểm tra. **Không** lấy DTS/`filogic.mk`/bl2/fip/mt76 của NR3053 (MediaTek MT7981, khác hẳn IPQ5018), không lấy đoạn ghi đè `distfeeds.list` trỏ `mediatek/filogic`, không lấy `irqbalance` (IPQ5018 1 hàng đợi RX, đã dùng packet steering).
+- **ccache** (bước 7b/9b): khôi phục/lưu `iw/.ccache` bằng actions/cache, khoá theo `iw_ref`, lưu cả khi build lỗi. Chỉ cache `.ccache`, không cache `staging_dir`/toolchain (dễ lệch khi đổi `iw_ref`). Build lỗi lạ sau khi đổi phiên bản → xoá cache trong tab Actions → Caches rồi chạy lại.
 - Không thêm biến thể `ath11k-smallbuffers`: PR OpenWrt #21495 chưa merge, còn lỗi Kconfig, và máy có 512 MB RAM nên không cần.
 
 ## Quy tắc quan trọng

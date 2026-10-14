@@ -31,3 +31,23 @@ CONFIG_PACKAGE_tcpdump-mini=y
 CONFIG_PACKAGE_kmod-tun=y
 CONFIG_PACKAGE_tailscale=y
 CONFIG_PACKAGE_luci-app-tailscale-community=y
+
+# --- Lay tu bo goi cua ban NR3053 (diepkhoa/sdmc-nr3053-repo) ---
+# Cung ly do voi Tailscale: cac goi nay can kmod (sch_cake, wireguard)
+# nen phai nam san trong firmware, khong cai tu kho chinh hang.
+# SQM chong nghen (bufferbloat), dung thuat toan cake
+CONFIG_PACKAGE_sqm-scripts=y
+CONFIG_PACKAGE_kmod-sched-cake=y
+CONFIG_PACKAGE_luci-app-sqm=y
+# WireGuard VPN
+CONFIG_PACKAGE_kmod-wireguard=y
+CONFIG_PACKAGE_wireguard-tools=y
+CONFIG_PACKAGE_luci-proto-wireguard=y
+# Quan ly file tren router qua LuCI
+CONFIG_PACKAGE_luci-app-filemanager=y
+
+# Bo dem bien dich: workflow luu/khoi phuc thu muc .ccache giua cac lan build.
+# CCACHE chi hien khi bat DEVEL (muc tuy chon nang cao), thieu dong DEVEL thi
+# make defconfig bo CCACHE di va buoc 7 bao loi.
+CONFIG_DEVEL=y
+CONFIG_CCACHE=y
