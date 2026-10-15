@@ -1,6 +1,6 @@
 name: Build WF810DF - ImmortalWrt tu ma nguon
 
-# Dong firmware ImmortalWrt cho FPT AX3000CV2 (Actiontec/CIG WF-810DF, IPQ5018)
+# Dong firmware ImmortalWrt cho WF810DF (IPQ5018)
 # bang cach BIEN DICH TU MA NGUON ImmortalWrt chinh hang + phan ho tro thiet bi
 # lay tu zcop/immortalwrt nhanh wf810df-25.12 (DTS, driver switch YT921x, cau hinh).
 # Mat khoang 2-4 gio cho 1 lan build.
@@ -75,7 +75,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      - name: 6. Them ho tro FPT AX3000CV2
+      - name: 6. Them ho tro WF810DF
         run: |
           python3 scripts/add-device.py iw
           # files/ = noi dung chep thang vao firmware (board-2.bin Wi-Fi, mui gio VN)
@@ -183,7 +183,7 @@ jobs:
           done
           grep -q "^default-settings-chn " "$M" && { echo "LOI: con default-settings-chn"; exit 1; }
           strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-wf810df.dtb | grep -q "fpt,wf810df" \
-            && echo "OK  DTB AX3000CV2" || { echo "LOI: DTB khong phai AX3000CV2"; exit 1; }
+            && echo "OK  DTB WF810DF" || { echo "LOI: DTB khong phai WF810DF"; exit 1; }
           grep -q "CONFIG_NET_DSA_YT921X=[ym]" build_dir/target-*/linux-qualcommax_ipq50xx/linux-*/.config \
             && echo "OK  driver switch YT921x" || { echo "LOI: kernel thieu driver YT921x"; exit 1; }
           # --- THEM: kiem tra metadata sysupgrade ---
@@ -243,7 +243,7 @@ jobs:
           tag_name: wf810df-${{ inputs.iw_ref }}-b${{ github.run_number }}
           name: WF810DF ImmortalWrt ${{ inputs.iw_ref }} - build ${{ github.run_number }}
           body: |
-            FPT AX3000CV2 (WF-810DF) - ImmortalWrt ${{ inputs.iw_ref }} bien dich tu ma nguon.
+            WF810DF - ImmortalWrt ${{ inputs.iw_ref }} bien dich tu ma nguon.
             - `*-factory.ubi`: nap lan dau qua U-Boot (xem README).
             - `*-initramfs-uImage.itb`: chay thu trong RAM, khong ghi NAND.
             - `*-sysupgrade.bin`: nang cap tu LuCI khi da chay ImmortalWrt.

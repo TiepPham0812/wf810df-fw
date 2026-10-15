@@ -1,6 +1,6 @@
-# Firmware FPT AX3000CV2 (WF-810DF) – ImmortalWrt biên dịch từ mã nguồn
+# Firmware WF810DF – ImmortalWrt biên dịch từ mã nguồn
 
-Biên dịch **ImmortalWrt chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vuông)** — Actiontec/CIG WF-810DF, Qualcomm IPQ5018 — trên GitHub Actions, không cần máy Linux.
+Biên dịch **ImmortalWrt chính hãng** cho **WF810DF bản CV2 (vỏ vuông)** — Qualcomm IPQ5018 — trên GitHub Actions, không cần máy Linux.
 
 > ⚠️ **Chỉ dành cho CV2 (vỏ vuông).** CV1 (vỏ tròn) dùng phần cứng mạng khác, không nạp bản này.
 
@@ -9,7 +9,7 @@ Biên dịch **ImmortalWrt chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vu
 - Nền thiết bị (cây thiết bị, driver switch YT9215S, board data Wi-Fi): [zcop/immortalwrt](https://github.com/zcop/immortalwrt/tree/wf810df-25.12) nhánh `wf810df-25.12`.
 - Driver YT921x gốc: David Yang (mmyangfl), backport từ Linux 6.19.
 - Port ban đầu và hướng dẫn nạp: [michioxd/openwrt-wf810df](https://github.com/michioxd/openwrt-wf810df).
-- Thảo luận, phân tích lỗi: [VOZ – OpenWrt cho FPT AX3000CV2](https://voz.vn/t/openwrt-cho-fpt-ax3000cv2-voc.1206194/).
+- Thảo luận, phân tích lỗi: [VOZ – thread OpenWrt cho máy này](https://voz.vn/t/openwrt-cho-fpt-ax3000cv2-voc.1206194/).
 
 ## Khác biệt so với bản michioxd
 
