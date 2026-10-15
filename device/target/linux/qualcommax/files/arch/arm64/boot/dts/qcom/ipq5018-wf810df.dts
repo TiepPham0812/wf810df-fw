@@ -12,7 +12,7 @@
 #include <dt-bindings/net/qcom-ipq-ess.h>
 
 / {
-	model = "FPT AX3000CV2";
+	model = "WF810DF";
 	compatible = "fpt,wf810df", "fpt,ax3000cv2", "actiontec,wf810df",
 		     "qcom,ipq5018";
 

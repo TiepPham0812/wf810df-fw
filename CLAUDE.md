@@ -1,7 +1,7 @@
 # Quy tắc dự án wf810df-fw
 
 ## Mục tiêu
-- Firmware **ImmortalWrt biên dịch từ mã nguồn chính hãng** cho **FPT AX3000CV2 bản CV2 (vỏ vuông)** — Actiontec/CIG WF-810DF, Qualcomm IPQ5018 + QCN6102, switch Motorcomm YT9215S.
+- Firmware **ImmortalWrt biên dịch từ mã nguồn chính hãng** cho **WF810DF bản CV2 (vỏ vuông)** — Qualcomm IPQ5018 + QCN6102, switch Motorcomm YT9215S.
 - Không dùng cho CV1 (vỏ tròn, khác PHY).
 - Nền thiết bị lấy từ **`zcop/immortalwrt` nhánh `wf810df-25.12`** (LAN và Wi-Fi đã bring-up, xác nhận trên thread VOZ). Không fork nguyên cây nguồn.
 - NSS chưa có (chỉ có ở hướng kernel QSDK 5.4, không ghép được).
@@ -21,6 +21,7 @@
 - **Không reset cứng switch** và **không dùng `2500base-x`** cho cổng CPU: reset xoá thanh ghi U-Boot đã cấu hình → LAN mất link; 2500base-x không chạy với qca-ssdk hiện tại (xem mô tả bản vá 940, thread VOZ trang 2).
 - Hiệu chuẩn 5 GHz (QCN6122) ở offset **`0x26800`** trong `0:ART` (không phải `0x4C000` của bản michioxd).
 - Board name có thể là `fpt,wf810df` hoặc `fpt,ax3000cv2` — mọi khối `case` phải có cả hai.
+- **Tên hiển thị chỉ là `WF810DF`** (DTS `model`, `DEVICE_MODEL`, banner, tiêu đề README/Release; chủ repo yêu cầu 15/10/2026, tránh phiền phức). Không đưa lại tên thương mại vào phần hiển thị. **Giữ nguyên** mã định danh nội bộ (`compatible`, `SUPPORTED_DEVICES`, board name `fpt,*`): đổi sẽ làm sysupgrade từ bản cũ bị từ chối và caldata/02_network không nhận máy.
 - `qualcommax/patches-6.12/0199-...keep-the-CMN-block-bus-clocks-enabled`: chống treo/boot-loop IPQ5018 khi driver CMN PLL tắt clock bus sau probe (Stanislaw Pal, đã gửi upstream; ImmortalWrt 25.12 chỉ có cho kernel 6.18). **Giữ lại** cho tới khi ImmortalWrt tự có bản vá này cho 6.12 — khi đó xoá bản của mình để tránh trùng.
 - `board-2.bin` (IPQ5018 và QCN6122) phải có thêm bản ghi **`qmi-board-id=255`** (cùng dữ liệu với 35 / 96). ImmortalWrt không có bản vá ath11k `210-...reading-board-id-from-devicetree` của zcop nên firmware báo board-id 255; thiếu bản ghi này thì cả hai radio không lên (đã thấy trên máy thật với bản b2, 08/10/2026). Bước 10 của workflow kiểm tra điều này.
 - Giữ **BDF của zcop** trong `board-2.bin` (byte định danh 0x44/0x6e), không thay bằng BDF gốc FPT của michioxd (0x60/0x7d, `variant=FPT-AX3000CV2`): đã thử cả hai trên máy thật ngày 08/10/2026, chủ repo chọn zcop. Caldata vẫn lấy từ `0:ART` của máy (đã đối chiếu header khớp FPT).

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Them ho tro FPT AX3000CV2 (Actiontec WF-810DF, IPQ5018) vao cay nguon ImmortalWrt.
+Them ho tro WF810DF (IPQ5018) vao cay nguon ImmortalWrt.
 
 Cach dung:  python3 scripts/add-device.py <thu-muc-nguon-immortalwrt>
 
@@ -103,10 +103,7 @@ define Device/{DEVICE}
 	$(call Device/UbiFit)
 	DEVICE_DTS := ipq5018-wf810df
 	DEVICE_DTS_CONFIG := config@mp03.3-c3
-	DEVICE_VENDOR := FPT
-	DEVICE_MODEL := AX3000CV2
-	DEVICE_ALT0_VENDOR := Actiontec
-	DEVICE_ALT0_MODEL := WF810DF
+	DEVICE_MODEL := WF810DF
 	SUPPORTED_DEVICES += fpt,wf810df fpt_ax3000cv2 fpt,ax3000cv2 actiontec,wf810df
 	SOC := ipq5018
 	BLOCKSIZE := 128k
@@ -194,7 +191,7 @@ TARGET_DEVICES += {DEVICE}
         write(p, t)
         print("sua   include/kernel-defaults.mk (vermagic bo qua YT921x)")
 
-    print("XONG: da them FPT AX3000CV2 (wf810df) vao", src)
+    print("XONG: da them WF810DF vao", src)
 
 
 if __name__ == "__main__":
