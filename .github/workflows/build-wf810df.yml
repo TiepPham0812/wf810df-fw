@@ -25,10 +25,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    # Moi truong github-pages: can de buoc 14 dang kho kmod.
-    environment:
-      name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}
+    # Khong gan moi truong github-pages o day: moi truong nay chi cho nhanh main,
+    # gan vao job build thi nhanh thu nghiem (vd hw-michioxd) bi chan ngay tu dau.
+    # Viec dang Pages tach sang job "pages" ben duoi, chi chay tren main.
     timeout-minutes: 350
     steps:
       - name: 1. Lay ma nguon repo
@@ -266,6 +265,7 @@ jobs:
             diffconfig.txt
 
       - name: 14a. Chuan bi kho kmod cho GitHub Pages
+        if: github.ref == 'refs/heads/main'
         working-directory: iw
         run: |
           P=bin/targets/qualcommax/ipq50xx/packages
@@ -279,10 +279,20 @@ jobs:
           du -sh ../pages; ls ../pages/packages | grep -c '\.apk$'
 
       - name: 14b. Dang kho kmod len GitHub Pages
+        if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
         with:
           path: pages
 
+  pages:
+    # Chi nhanh main moi dang kho kmod: nhanh thu nghiem khong ghi de kho cua router.
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
       - name: 14c. Trien khai GitHub Pages
         id: pages
         uses: actions/deploy-pages@v4
