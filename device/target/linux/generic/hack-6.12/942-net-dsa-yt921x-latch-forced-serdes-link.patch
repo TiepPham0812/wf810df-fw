@@ -1,0 +1,29 @@
+From: ppptran <ppptran86@gmail.com>
+Subject: [PATCH] net: dsa: yt921x: latch forced SerDes link on AN edge
+
+Vendor HAL programs the SERDES force value first and raises AN_LINK_EN
+afterwards; the MAC latches the forced link on that 0->1 edge. Mirror
+that order for the external (CPU) port so PORT_STATUS reports link,
+needed when the CPU lane runs 2500BASE-X.
+
+Ported to the v6.19 single-file driver used by wf810df-fw from
+michioxd/openwrt-wf810df 995-net-dsa-yt921x-latch-force-link-after-serdes.
+
+--- a/drivers/net/dsa/yt921x.c
++++ b/drivers/net/dsa/yt921x.c
+@@ -2234,6 +2234,15 @@
+ 		res = yt921x_reg_write(priv, YT921X_MDIO_POLLINGn(port), ctrl);
+ 		if (res)
+ 			return res;
++
++		/* Vendor HAL forces the SERDES link first, then raises
++		 * AN_LINK_EN; the MAC latches the forced link on that 0->1
++		 * edge (ppptran, michioxd/openwrt-wf810df 995).
++		 */
++		res = yt921x_reg_set_bits(priv, YT921X_PORTn_CTRL(port),
++					  YT921X_PORT_LINK);
++		if (res)
++			return res;
+ 	}
+ 
+ 	return 0;

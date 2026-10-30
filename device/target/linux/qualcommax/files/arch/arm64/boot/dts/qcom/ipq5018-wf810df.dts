@@ -133,14 +133,16 @@
 			/* Current upstream yt921x support models the CPU link on port 8. */
 			port@8 {
 				reg = <8>;
-				phy-mode = "sgmii";
+				/* Thu nghiem 2.5G (theo ppptran/michioxd, giong firmware goc):
+				 * UNIPHY IPQ5018 o SGMII+ 312.5 MHz <-> SERDES0 YT9215S o
+				 * 2500BASE-X (SERDES mode 4). Ban on dinh: "sgmii" 1000.
+				 */
+				phy-mode = "2500base-x";
 				ethernet = <&dp2>;
 
 				fixed-link {
-					speed = <1000>;
+					speed = <2500>;
 					full-duplex;
-					pause;
-					asym-pause;
 				};
 			};
 		};
@@ -159,7 +161,8 @@
 &switch {
 	status = "okay";
 
-	switch_mac_mode = <MAC_MODE_SGMII_CHANNEL0>;
+	/* SGMII+ (312.5 MHz) cho duong CPU 2.5G */
+	switch_mac_mode = <MAC_MODE_SGMII_PLUS>;
 	switch_mac_mode1 = <MAC_MODE_DISABLED>;
 	switch_mac_mode2 = <MAC_MODE_DISABLED>;
 
@@ -167,6 +170,20 @@
 	switch_wan_bmp = <ESS_PORT1>;
 	switch_lan_bmp = <ESS_PORT2>;
 	switch_inner_bmp = <ESS_PORT7>;
+
+	/*
+	 * Bo uniphy1_ahb_rst: reset AHB xoa MODE_CTRL/PHY_MODE/CH0_INPUT_OUTPUT_4
+	 * tren cong CPU ep toc do. Duong SGMII+ cua SSDK (ban va 9001) dung
+	 * uniphy1_soft_rst roi ghi lai PHY_MODE de chot che do SGMII+.
+	 */
+	resets = <&gcc GCC_GMAC0_BCR>,
+		 <&gcc GCC_GMAC1_BCR>,
+		 <&gcc GCC_UNIPHY_BCR>,
+		 <&gcc GCC_UNIPHY_SOFT_RESET>;
+	reset-names = "gmac0_bcr_rst",
+		      "gmac1_bcr_rst",
+		      "uniphy_bcr_rst",
+		      "uniphy1_soft_rst";
 
 	qcom,port_phyinfo {
 		/* MAC0 -> integrated GE PHY -> WAN */
@@ -179,7 +196,8 @@
 		/* MAC1 -> YT9215 CPU port */
 		port@1 {
 			port_id = <2>;
-			forced-speed = <1000>;
+			/* 2500 chon clock GMAC1 312.5 MHz ma nguon SGMII+ cap */
+			forced-speed = <2500>;
 			forced-duplex = <1>;
 		};
 	};
@@ -210,11 +228,11 @@
 	nvmem-cells = <&macaddr_appsblenv_ethaddr 1>;
 	nvmem-cell-names = "mac-address";
 
+	phy-mode = "2500base-x";
+
 	fixed-link {
-		speed = <1000>;
+		speed = <2500>;
 		full-duplex;
-		pause;
-		asym-pause;
 	};
 };
 

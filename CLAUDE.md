@@ -19,6 +19,7 @@
 
 ## Những điểm đã có bằng chứng — KHÔNG đổi lại
 - **Không reset cứng switch** và **không dùng `2500base-x`** cho cổng CPU: reset xoá thanh ghi U-Boot đã cấu hình → LAN mất link; 2500base-x không chạy với qca-ssdk hiện tại (xem mô tả bản vá 940, thread VOZ trang 2).
+  - **Ngoại lệ đang thử (nhánh `hw-michioxd`, 30/10/2026):** ppptran (michioxd/openwrt-wf810df `d98eb99`, đã chạy trên máy thật) làm được 2.5G nhờ vá qca-ssdk (soft reset UNIPHY cho SGMII+, bỏ `uniphy1_ahb_rst`). Nhánh này giữ **bỏ qua reset cứng**, chỉ đổi đường CPU sang `2500base-x` + SGMII+ + bản vá 942 (chốt link SERDES), 943 (fixed-link 2500), `qca-ssdk` 9001 (PKG_RELEASE 101 để `apk upgrade` không thay bằng bản chính hãng). **Chưa kiểm chứng trên máy của chủ repo — chỉ merge vào `main` khi đã chạy thử initramfs và sysupgrade trên máy vọc, 3 cổng LAN lên link.** Không đổi cấu hình kernel → vẫn đồng bộ vermagic.
 - Hiệu chuẩn 5 GHz (QCN6122) ở offset **`0x26800`** trong `0:ART` (không phải `0x4C000` của bản michioxd).
 - Board name có thể là `fpt,wf810df` hoặc `fpt,ax3000cv2` — mọi khối `case` phải có cả hai.
 - **Tên hiển thị chỉ là `WF810DF`** (DTS `model`, `DEVICE_MODEL`, banner, tiêu đề README/Release; chủ repo yêu cầu 15/10/2026, tránh phiền phức). Không đưa lại tên thương mại vào phần hiển thị. **Giữ nguyên** mã định danh nội bộ (`compatible`, `SUPPORTED_DEVICES`, board name `fpt,*`): đổi sẽ làm sysupgrade từ bản cũ bị từ chối và caldata/02_network không nhận máy.
