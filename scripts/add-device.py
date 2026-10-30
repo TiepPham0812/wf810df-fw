@@ -191,6 +191,19 @@ TARGET_DEVICES += {DEVICE}
         write(p, t)
         print("sua   include/kernel-defaults.mk (vermagic bo qua YT921x)")
 
+    # 9. qca-ssdk co ban va rieng cua 810 (9001: SGMII+ cho duong CPU 2.5G) ->
+    #    nang PKG_RELEASE de "apk upgrade" khong thay bang kmod-qca-ssdk chinh hang
+    #    (ban chinh hang reset AHB -> mat che do SGMII+ -> mat 3 cong LAN).
+    if os.path.isdir(os.path.join(repo, "device/package/kernel/qca-ssdk/patches")):
+        p = os.path.join(src, "package/kernel/qca-ssdk/Makefile")
+        t = read(p)
+        if "PKG_RELEASE:=101\n" not in t:
+            if not re.search(r"^PKG_RELEASE:=\d+$", t, flags=re.M):
+                die(f"{p}: khong thay PKG_RELEASE")
+            t = re.sub(r"^PKG_RELEASE:=\d+$", "PKG_RELEASE:=101", t, count=1, flags=re.M)
+            write(p, t)
+            print("sua   qca-ssdk PKG_RELEASE:=101 (ban va rieng 810)")
+
     print("XONG: da them WF810DF vao", src)
 
 

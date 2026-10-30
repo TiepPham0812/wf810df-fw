@@ -219,6 +219,14 @@ jobs:
           # Firmware phai tro toi kho kmod rieng
           grep -q "github.io/.*/packages/packages.adb" build_dir/target-*/root-qualcommax*/etc/apk/repositories.d/customfeeds.list \
             && echo "OK  customfeeds.list tro toi kho kmod" || { echo "LOI: thieu kho kmod trong customfeeds.list"; exit 1; }
+          # Thu nghiem duong CPU 2.5G (nhanh hw-michioxd): DTB phai o 2500base-x va
+          # kmod-qca-ssdk phai la ban va rieng (r101), neu khong LAN se khong len.
+          if [ -d ../device/package/kernel/qca-ssdk/patches ]; then
+            strings build_dir/target-*/linux-qualcommax_ipq50xx/image-ipq5018-wf810df.dtb | grep -q "2500base-x" \
+              && echo "OK  DTB duong CPU 2500base-x" || { echo "LOI: DTB khong o 2500base-x"; exit 1; }
+            grep -qE "^kmod-qca-ssdk - .*-r101$" "$M" \
+              && echo "OK  kmod-qca-ssdk ban va rieng (r101)" || { echo "LOI: kmod-qca-ssdk khong phai ban va rieng"; grep "^kmod-qca-ssdk" "$M"; exit 1; }
+          fi
           cd $OUT && sha256sum *wf810df* > sha256sums-wf810df.txt && cat sha256sums-wf810df.txt
           
       - name: 11. Dong goi kmod (de cai them bang apk)

@@ -1,0 +1,38 @@
+From: ppptran <ppptran86@gmail.com>
+Subject: [PATCH] net: phy: fixed_phy: accept 2500 fixed-link
+
+Allow a 2500 Mbit/s fixed-link (CPU lane IPQ5018 GMAC1 <-> YT9215S
+SERDES in 2500BASE-X). The Clause 22 software PHY has no 2.5G status
+bits, so swphy reports it with the 1000M encoding.
+
+From michioxd/openwrt-wf810df hack-6.12/756.
+
+--- a/drivers/net/phy/fixed_phy.c
++++ b/drivers/net/phy/fixed_phy.c
+@@ -274,6 +274,12 @@
+ 	phy->is_pseudo_fixed_link = true;
+ 
+ 	switch (status->speed) {
++	case SPEED_2500:
++		linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
++				 phy->supported);
++		linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT,
++				 phy->supported);
++		fallthrough;
+ 	case SPEED_1000:
+ 		linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
+ 				 phy->supported);
+--- a/drivers/net/phy/swphy.c
++++ b/drivers/net/phy/swphy.c
+@@ -71,6 +71,11 @@
+ static int swphy_decode_speed(int speed)
+ {
+ 	switch (speed) {
++	/*
++	 * Clause 22 software PHY has no dedicated 2.5G status bits.
++	 * Accept 2500 fixed-link and represent it using 1000M C22 encoding.
++	 */
++	case SPEED_2500:
+ 	case 1000:
+ 		return SWMII_SPEED_1000;
+ 	case 100:
